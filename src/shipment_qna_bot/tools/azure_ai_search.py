@@ -53,16 +53,14 @@ class AzureAISearchTool:
 
         # code-only field for consignee filter- RLS
         self._consignee_field = os.getenv(
-            "AZURE_SEARCH_CONSIGNEE_FIELD", "consignee_codes"
+            "AZURE_SEARCH_CONSIGNEE_FIELD", "consignee_code_ids"
         )
         self._consignee_is_collection = (
             os.getenv("AZURE_SEARCH_CONSIGNEE_IS_COLLECTION", "true").lower() == "true"
         )
 
-        # IMPORTANT: should be code-only, ideally a collection field in the index
-
         # vector field
-        self._vector_field = os.getenv("AZURE_SEARCH_VECTOR_FIELD", "text_vector")
+        self._vector_field = os.getenv("AZURE_SEARCH_VECTOR_FIELD", "content_vector")
 
     def _consignee_filter(self, codes: List[str]) -> str:
         # Uses search.in for matching against a list.

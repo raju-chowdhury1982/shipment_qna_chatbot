@@ -42,8 +42,14 @@ class AzureOpenAIEmbeddingsClient:
         text = (text or "").strip()
         if not text:
             return []
-        resp = self._client.embeddings.create(
-            model=self._deployment,
-            input=text,
-        )
-        return list(resp.data[0].embedding)
+        try:
+            # For newer OpenAI SDK (1.x+) and specific Azure API versions,
+            # input often expects a list of strings.
+            resp = self._client.embeddings.create(
+                model=self._deployment,
+                input=[text],
+            )
+            return list(resp.data[0].embedding)
+        except Exception as e:
+            # Log the error or re-raise with more context
+            raise RuntimeError(f"Azure OpenAI Embedding failed: {e}") from e

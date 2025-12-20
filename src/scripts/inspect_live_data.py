@@ -14,7 +14,7 @@ def inspect_live_data():
     endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
     api_key = os.getenv("AZURE_SEARCH_API_KEY")
     # Force check of the indexer target
-    index_name = "shipment_jsonl"
+    index_name = os.getenv("AZURE_SEARCH_INDEX_NAME", "shipment-jsonl-idx")
 
     if not endpoint or not index_name:
         print("Missing env vars")
@@ -84,6 +84,7 @@ def inspect_live_data():
             count += 1
             print(f"\nDoc ID: {doc.get('chunk_id')}")
             print(f"Container: {doc.get('metadata', {}).get('container_number')}")
+            print(f"Parent ID: {doc.get('parent_id')}")
             print(f"Consignee Code (top): {doc.get('consignee_code')}")
 
         print(f"\nTotal docs retrieved in sample: {count}")

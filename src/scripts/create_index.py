@@ -1,0 +1,125 @@
+# $env:PYTHONPATH='c:\Users\CHOWDHURYRaju\Desktop\shipment_qna_bot\src'; python src/scripts/create_index.py
+
+import os
+
+from azure.core.credentials import AzureKeyCredential
+from azure.identity import DefaultAzureCredential
+from azure.search.documents.indexes import SearchIndexClient
+from azure.search.documents.indexes.models import (HnswAlgorithmConfiguration,
+                                                   SearchField,
+                                                   SearchFieldDataType,
+                                                   SearchIndex, SimpleField,
+                                                   VectorSearch,
+                                                   VectorSearchProfile)
+from dotenv import find_dotenv, load_dotenv
+
+load_dotenv(find_dotenv(), override=True)
+
+
+def create_index():
+    endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
+    api_key = os.getenv("AZURE_SEARCH_API_KEY")
+    index_name = "shipment-idx"
+
+    if not endpoint:
+        print("Missing AZURE_SEARCH_ENDPOINT")
+        return
+
+    cred = AzureKeyCredential(api_key) if api_key else DefaultAzureCredential()
+    client = SearchIndexClient(endpoint=endpoint, credential=cred)
+
+    # Define the fields
+    fields = [
+        SimpleField(
+            name="document_id",
+            type=SearchFieldDataType.String,
+            key=True,
+            filterable=True,
+        ),
+        SearchField(name="content", type=SearchFieldDataType.String, searchable=True),
+        # Vector field for hybrid search
+        SearchField(
+            name="content_vector",
+            type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
+            searchable=True,
+            vector_search_dimensions=1536,  # Default for text-embedding-3-small
+            vector_search_profile_name="my-vector-profile",
+        ),
+        # RLS Field: Critical for filtering
+        SearchField(
+            name="consignee_code_ids",
+            type=SearchFieldDataType.Collection(SearchFieldDataType.String),
+            filterable=True,
+        ),
+        # Lookup Fields
+        SearchField(
+            name="container_number",
+            type=SearchFieldDataType.String,
+            searchable=True,
+            filterable=True,
+        ),
+        SearchField(
+            name="po_numbers",
+            type=SearchFieldDataType.Collection(SearchFieldDataType.String),
+            searchable=True,
+            filterable=True,
+        ),
+        SearchField(
+            name="ocean_bl_numbers",
+            type=SearchFieldDataType.Collection(SearchFieldDataType.String),
+            searchable=True,
+            filterable=True,
+        ),
+        SearchField(
+            name="booking_numbers",
+            type=SearchFieldDataType.Collection(SearchFieldDataType.String),
+            searchable=True,
+            filterable=True,
+        ),
+        # Date Fields
+        SearchField(
+            name="eta_dp_date",
+            type=SearchFieldDataType.DateTimeOffset,
+            filterable=True,
+            sortable=True,
+        ),
+        SearchField(
+            name="eta_fd_date",
+            type=SearchFieldDataType.DateTimeOffset,
+            filterable=True,
+            sortable=True,
+        ),
+        # Additional metadata as blob
+        SearchField(
+            name="metadata_json",
+            type=SearchFieldDataType.String,
+            searchable=False,
+            filterable=False,
+            retrievable=True,
+        ),
+    ]
+
+    # Configure vector search
+    vector_search = VectorSearch(
+        algorithms=[
+            HnswAlgorithmConfiguration(name="my-hnsw"),
+        ],
+        profiles=[
+            VectorSearchProfile(
+                name="my-vector-profile", algorithm_configuration_name="my-hnsw"
+            ),
+        ],
+    )
+
+    index = SearchIndex(name=index_name, fields=fields, vector_search=vector_search)
+
+    print(f"Creating index '{index_name}'...")
+    try:
+        result = client.create_or_update_index(index)
+        print(f"Index '{result.name}' created/updated successfully.")
+    except Exception as e:
+        print(f"Failed to create index: {e}")
+
+
+if __name__ == "__main__":
+    create_index()

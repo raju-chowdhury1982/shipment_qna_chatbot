@@ -26,8 +26,21 @@ def inspect_index():
         index = client.get_index(index_name)
         print(f"Index: {index.name}")
         print("Fields:")
-        for field in index.fields:
-            print(f"- {field.name} (Type: {field.type})")
+
+        def print_fields(fields, indent=""):
+            for field in fields:
+                attr = []
+                if getattr(field, "filterable", False):
+                    attr.append("Filterable")
+                if getattr(field, "searchable", False):
+                    attr.append("Searchable")
+                print(f"{indent}- {field.name} (Type: {field.type}) [{' '.join(attr)}]")
+                if field.type == "Edm.ComplexType" or (
+                    hasattr(field, "fields") and field.fields
+                ):
+                    print_fields(field.fields, indent + "  ")
+
+        print_fields(index.fields)
     except Exception as e:
         print(f"Error getting index: {e}")
 
