@@ -105,6 +105,40 @@ def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 extra={"step": "NODE:Retriever"},
             )
         except Exception as e:
+            error_msg = str(e)
+            if extra_filter and (
+                "Invalid expression" in error_msg or "search.in" in error_msg
+            ):
+                logger.warning(
+                    f"Search failed with invalid filter '{extra_filter}'. Retrying without filter.",
+                    extra={"step": "NODE:Retriever"},
+                )
+                try:
+                    search_response = tool.search(
+                        query_text=query_text or "*",
+                        consignee_codes=consignee_codes,
+                        top_k=int(plan.get("top_k", 8)),
+                        vector=vector,
+                        vector_k=int(plan.get("vector_k", 30)),
+                        extra_filter=None,  # Retry without the bad filter
+                        include_total_count=plan.get("include_total_count", False),
+                        skip=plan.get("skip"),
+                        order_by=plan.get("order_by"),
+                    )
+                    hits = search_response["hits"]
+                    state["hits"] = hits
+                    state["idx_analytics"] = {
+                        "count": search_response.get("count"),
+                        "facets": search_response.get("facets"),
+                    }
+                    logger.info(
+                        f"Retrieved {len(hits)} hits (fallback) for query=<{query_text}>",
+                        extra={"step": "NODE:Retriever"},
+                    )
+                    return state
+                except Exception as retry_e:
+                    logger.error(f"Fallback search also failed: {retry_e}")
+
             state.setdefault("errors", []).append(
                 f"Search failed: {type(e).__name__}: {e}"
             )

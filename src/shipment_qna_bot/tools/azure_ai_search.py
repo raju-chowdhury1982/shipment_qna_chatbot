@@ -50,9 +50,12 @@ class AzureAISearchTool:
         )
 
         # configured field names in az-index
-        self._id_field = os.getenv("AZURE_SEARCH_ID_FIELD", "chunk_id")
+        self._id_field = os.getenv("AZURE_SEARCH_ID_FIELD", "document_id")
         self._content_field = os.getenv("AZURE_SEARCH_CONTENT_FIELD", "chunk")
-        self._container_field = os.getenv("AZURE_SEARCH_CONTAINER_FIELD", "metadata")
+        self._container_field = os.getenv(
+            "AZURE_SEARCH_CONTAINER_FIELD", "container_number"
+        )
+        self._metadata_field = os.getenv("AZURE_SEARCH_METADATA_FIELD", "metadata_json")
 
         # code-only field for consignee filter- RLS
         self._consignee_field = os.getenv(
@@ -130,7 +133,6 @@ class AzureAISearchTool:
             "filter": final_filter,
             "select": None,  # Retrieve all retrievable fields
             "skip": skip,
-            "skip": skip,
             "order_by": order_by,
         }
 
@@ -153,11 +155,20 @@ class AzureAISearchTool:
         for r in results:
             doc = dict(r)
 
-            # Extract flattened values for easy access, but keep full doc
-            container_number = doc.get("container_number")
+            # Extract key fields using configured names
+            container_number = doc.get(self._container_field)
             if not container_number:
-                raw_meta = doc.get(self._container_field)
-                if isinstance(raw_meta, dict):
+                # Fallback check inside metadata_json if top-level missing
+                raw_meta = doc.get(self._metadata_field)
+                if isinstance(raw_meta, str):
+                    try:
+                        import json
+
+                        meta_dict = json.loads(raw_meta)
+                        container_number = meta_dict.get("container_number")
+                    except:
+                        pass
+                elif isinstance(raw_meta, dict):
                     container_number = raw_meta.get("container_number")
 
             hit = {

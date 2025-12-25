@@ -17,6 +17,9 @@ def _get_chat_tool() -> AzureOpenAIChatTool:
     return _CHAT_TOOL
 
 
+from datetime import datetime
+
+
 def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Generates a RetrievalPlan (query text, top_k, filters) using LLM and extracted metadata.
@@ -40,32 +43,47 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         extracted = state.get("extracted_ids") or {}
 
         # Logistics mapping and synonym dictionary for the LLM
+        # Logistics mapping and synonym dictionary for the LLM
         logistics_context = """
         Field Mappings in Index:
-        - container_number (String): e.g. SEGU5935510
-        - po_numbers (Collection): e.g. 5302997239
-        - booking_numbers (Collection): e.g. TH2017996
-        - obl_nos (Collection)
+        - container_number (String): e.g. ABCD1234567
+        - po_numbers (Collection): e.g. 12356789. Filter using: po_numbers/any(p: p eq '12356789')
+        - booking_numbers (Collection): e.g. TH2017996. Filter using: booking_numbers/any(b: b eq 'TH2017996')
+        - obl_nos (Collection): e.g. MAEU12897654. Filter using: obl_nos/any(o: o eq 'MAEU12897654')
         - shipment_status (String): DELIVERED, IN_OCEAN, AT_DISCHARGE_PORT, READY_FOR_PICKUP, EMPTY_RETURNED
-        - hot_container (Boolean): True/False
         - discharge_port_name (String): e.g. "Los Angeles"
         - mother_vessel_name (String): e.g. "MAERSK SERANGOON"
+        - optimal_eta_fd_date (DateTimeOffset): e.g. "2024-01-01T00:00:00Z"
+        - eta_dp_date (DateTimeOffset): e.g. "2024-01-01T00:00:00Z"
 
         Synonyms:
         - "on water", "sailing" -> shipment_status eq 'IN_OCEAN'
-        - "hot" -> hot_container eq true
+        - "arrived" -> shipment_status eq 'AT_DISCHARGE_PORT'
     """.strip()
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
 
         system_prompt = f"""
         You are a Search Planner for a logistics bot. Given a user question and extracted entities, generate an Azure Search Plan.
         
+        Current Date: {today_str}
+
         {logistics_context}
 
+        CRITICAL INSTRUCTIONS:
+        1. FORBIDDEN FIELDS: NEVER use field names like 'ocean_bl_numbers', 'booking_id', or 'po_id'. ONLY use the field names listed in 'Field Mappings in Index'.
+        2. NORMALIZATION: Extracted entities (PO, OBL, Container, Booking) have been normalized to UPPERCASE. ALWAYS use these normalized values from 'Extracted Entities' in your filters. 
+        3. COLLECTION FIELDS: 'po_numbers', 'booking_numbers', and 'obl_nos' are collections. Filter using: field/any(x: x eq 'VALUE').
+        4. QUERY TEXT (ID BOOSTING): ALWAYS include all extracted identifiers (PO, OBL, Booking, Container) at the BEGINNING of the "query_text" string to boost exact matching in hybrid search.
+           - Example: If PO is 2J69300, query_text should be: "2J69300 [original query text]".
+        
+        Date Filtering (Relative Dates):
+        - Use optimal_eta_fd_date for future/past day checks.
+        
         Pagination & Sorting:
-        - "next 10", "page 2" -> use "skip": 10 (or appropriate offset)
-        - "current data", "latest", "recent" -> use "order_by": "optimal_eta_fd_date desc"
-        - Default sorting is by relevance (null).
-
+        - "next 10" -> set "skip".
+        - "recent", "latest" -> set "order_by": "optimal_eta_fd_date desc".
+        
         Output JSON only:
         {{
             "query_text": "text for hybrid search",
@@ -124,7 +142,7 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # Booster: if we have specific IDs, make sure they are in query_text
         all_ids = []
-        for k in ["container", "po", "booking", "obl"]:
+        for k in ["container_number", "po_numbers", "booking_numbers", "obl_nos"]:
             all_ids.extend(extracted.get(k) or [])
 
         if all_ids:
