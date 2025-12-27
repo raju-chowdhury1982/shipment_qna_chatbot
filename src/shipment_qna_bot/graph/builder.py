@@ -22,7 +22,7 @@ def should_continue(state: GraphState):
         return "end"
     if state.get("retry_count", 0) >= state.get("max_retries", 3):
         return "end"
-    
+
     intent = state.get("intent")
     if intent == "analytics":
         return "retry_analytics"
