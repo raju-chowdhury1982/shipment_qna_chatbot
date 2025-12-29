@@ -6,6 +6,8 @@ from shipment_qna_bot.graph.state import RetrievalPlan
 from shipment_qna_bot.logging.graph_tracing import log_node_execution
 from shipment_qna_bot.logging.logger import logger, set_log_context
 from shipment_qna_bot.tools.azure_openai_chat import AzureOpenAIChatTool
+from shipment_qna_bot.tools.date_tools import (GET_TODAY_DATE_SCHEMA,
+                                               get_today_date)
 
 _CHAT_TOOL = None
 
@@ -62,6 +64,8 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """.strip()
 
         today_str = datetime.now().strftime("%Y-%m-%d")
+        # NOTE: We now allow the LLM to call get_today_date if it needs to be sure,
+        # but we also provide it here as context.
 
         system_prompt = f"""
         You are a Search Planner for a logistics bot. Given a user question and extracted entities, generate an Azure Search Plan.
@@ -115,7 +119,36 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
         try:
             chat = _get_chat_tool()
-            response = chat.chat_completion(messages, temperature=0.0)
+
+            # First pass: Allow tool usage
+            response = chat.chat_completion(
+                messages,
+                temperature=0.0,
+                tools=[GET_TODAY_DATE_SCHEMA],
+                tool_choice="auto",
+            )
+
+            # Check for tool calls
+            if response.get("tool_calls"):
+                tool_calls = response["tool_calls"]
+                # Append assistant's tool call message
+                messages.append({"role": "assistant", "tool_calls": tool_calls})
+
+                for tc in tool_calls:
+                    if tc.function.name == "get_today_date":
+                        date_result = get_today_date()
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "name": "get_today_date",
+                                "content": date_result,
+                            }
+                        )
+
+                # Second pass: Get final answer with tool result
+                response = chat.chat_completion(messages, temperature=0.0)
+
             res = response["content"]
             usage = response["usage"]
 
