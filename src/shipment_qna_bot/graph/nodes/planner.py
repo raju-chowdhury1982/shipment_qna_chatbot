@@ -42,18 +42,20 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # Logistics mapping and synonym dictionary for the LLM
         logistics_context = """
         Field Mappings in Index:
-        - container_number (String): e.g. SEGU5935510
-        - po_numbers (Collection): e.g. 5302997239
-        - booking_numbers (Collection): e.g. TH2017996
-        - ocean_bl_numbers (Collection)
-        - shipment_status (String): DELIVERED, IN_OCEAN, AT_DISCHARGE_PORT, READY_FOR_PICKUP, EMPTY_RETURNED
-        - hot_container (Boolean): True/False
-        - discharge_port_name (String): e.g. "Los Angeles"
-        - mother_vessel_name (String): e.g. "MAERSK SERANGOON"
+        - container_number (String): e.g. SEGU5935510. Use: container_number eq '...' or contains(container_number, '...')
+        - po_numbers (Collection): e.g. 5302997239. Use: po_numbers/any(p: p eq '...')
+        - booking_numbers (Collection): e.g. TH2017996. Use: booking_numbers/any(b: b eq '...')
+        - obl_nos (Collection): e.g. OBL123. Use: obl_nos/any(o: o eq '...')
+        - shipment_status (String): DELIVERED, IN_OCEAN, AT_DISCHARGE_PORT, READY_FOR_PICKUP, EMPTY_RETURNED. Use: shipment_status eq '...'
+        - hot_container_flag (Boolean): true/false. Use: hot_container_flag eq true
+        - discharge_port_name (String): e.g. "Los Angeles". Use: contains(discharge_port_name, '...')
+        - mother_vessel_name (String): e.g. "MAERSK SERANGOON". Use: contains(mother_vessel_name, '...')
 
-        Synonyms:
+        Synonyms & OData Tips:
         - "on water", "sailing" -> shipment_status eq 'IN_OCEAN'
-        - "hot" -> hot_container eq true
+        - "hot" -> hot_container_flag eq true
+        - For ID Collections (PO, Booking, OBL), ALWAYS use 'any(p: p eq '...')' syntax.
+        - For descriptive fields (Port, Vessel), 'contains(field, '...')' is more flexible than 'eq'.
     """.strip()
 
         system_prompt = f"""
@@ -64,6 +66,7 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         Output JSON only:
         {{
             "query_text": "text for hybrid search",
+            "top_k": number (default 20, max 100),
             "extra_filter": "OData filter string or null",
             "reason": "short explanation"
         }}
@@ -107,7 +110,7 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # Construct final plan
         plan: RetrievalPlan = {
             "query_text": plan_data.get("query_text") or q,
-            "top_k": 8,
+            "top_k": plan_data.get("top_k", 20),
             "vector_k": 30,
             "extra_filter": plan_data.get("extra_filter"),
             "reason": plan_data.get("reason", "fallback"),

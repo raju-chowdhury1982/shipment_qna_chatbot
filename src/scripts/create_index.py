@@ -6,10 +6,14 @@ from azure.core.credentials import AzureKeyCredential
 from azure.identity import DefaultAzureCredential
 from azure.search.documents.indexes import SearchIndexClient
 from azure.search.documents.indexes.models import (HnswAlgorithmConfiguration,
-                                                   SearchField,
+                                                   ScoringProfile, SearchField,
                                                    SearchFieldDataType,
-                                                   SearchIndex, SimpleField,
-                                                   VectorSearch,
+                                                   SearchIndex,
+                                                   SemanticConfiguration,
+                                                   SemanticField,
+                                                   SemanticPrioritizedFields,
+                                                   SemanticSearch, SimpleField,
+                                                   TextWeights, VectorSearch,
                                                    VectorSearchProfile)
 from dotenv import find_dotenv, load_dotenv
 
@@ -65,7 +69,7 @@ def create_index():
             filterable=True,
         ),
         SearchField(
-            name="ocean_bl_numbers",
+            name="obl_nos",
             type=SearchFieldDataType.Collection(SearchFieldDataType.String),
             searchable=True,
             filterable=True,
@@ -75,6 +79,12 @@ def create_index():
             type=SearchFieldDataType.Collection(SearchFieldDataType.String),
             searchable=True,
             filterable=True,
+        ),
+        SimpleField(
+            name="hot_container_flag",
+            type=SearchFieldDataType.Boolean,
+            filterable=True,
+            sortable=True,
         ),
         # Date Fields
         SearchField(
@@ -95,7 +105,6 @@ def create_index():
             type=SearchFieldDataType.String,
             searchable=False,
             filterable=False,
-            retrievable=True,
         ),
     ]
 
@@ -111,12 +120,45 @@ def create_index():
         ],
     )
 
-    index = SearchIndex(name=index_name, fields=fields, vector_search=vector_search)
+    # Configure scoring profiles
+    scoring_profiles = [
+        ScoringProfile(
+            name="logistics-score",
+            text_weights=TextWeights(weights={"content": 2.5}),
+        )
+    ]
+
+    # Configure semantic search
+    semantic_search = SemanticSearch(
+        configurations=[
+            SemanticConfiguration(
+                name="default",
+                prioritized_fields=SemanticPrioritizedFields(
+                    content_fields=[SemanticField(field_name="content")],
+                ),
+            )
+        ]
+    )
+
+    index = SearchIndex(
+        name=index_name,
+        fields=fields,
+        vector_search=vector_search,
+        scoring_profiles=scoring_profiles,
+        semantic_search=semantic_search,
+    )
+
+    print(f"Deleting index '{index_name}' if it exists...")
+    try:
+        client.delete_index(index_name)
+        print(f"Index '{index_name}' deleted.")
+    except Exception as e:
+        print(f"Index '{index_name}' not found or could not be deleted: {e}")
 
     print(f"Creating index '{index_name}'...")
     try:
-        result = client.create_or_update_index(index)
-        print(f"Index '{result.name}' created/updated successfully.")
+        result = client.create_index(index)
+        print(f"Index '{result.name}' created successfully.")
     except Exception as e:
         print(f"Failed to create index: {e}")
 
