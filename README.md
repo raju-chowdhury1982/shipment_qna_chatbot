@@ -15,20 +15,16 @@ A production-ready Shipment Q&A chatbot using **LangGraph**, **Azure AI Search**
 
 ```text
 shipment_qna_bot/
-├─ docs/                 # Documentation & Plans
-│  ├─ architecture.md
-│  ├─ rls_model.md
-│  ├─ index_schema.md
-│  ├─ task.md            # Progress Checklist
-│  └─ implementation_plan.md
+├─ docs/                 
 ├─ src/
 │  └─ shipment_qna_bot/
-│     ├─ logging/        # Observability (Logger, Middleware, Tracing)
+│     ├─ logging/---log  # Observability (Logger, Middleware, Tracing)
+|     ├─ models/         
 │     ├─ security/       # RLS & Scope Resolution
 │     ├─ graph/          # LangGraph Workflow (State, Nodes, Builder)
 │     ├─ tools/          # Azure Search, OpenAI, SQL tools
 │     ├─ api/            # FastAPI Routes
-│     └─ ui/             # Streamlit Demo
+│     └─ static-ui/      # Streamlit Demo
 └─ tests/                # Unit & Integration Tests
 ```
 
@@ -37,17 +33,14 @@ shipment_qna_bot/
 ## Progress
 - [x] **Phase 0: Observability**: Structured logging and graph tracing implemented.
 - [x] **Phase 1: Security**: RLS scope resolution and filter building implemented & verified.
-- [ ] **Phase 2: Core Graph**: Implementing State, Nodes, and Workflow.
-- [ ] **Phase 3: Retrieval**: Connecting to Azure AI Search.
-- [ ] **Phase 4: API**: Exposing endpoints.
+- [x] **Phase 2: Core Graph**: Implementing State, Nodes, and Workflow.
+- [x] **Phase 3: Retrieval**: Connecting to Azure AI Search.
+- [x] **Phase 4: API**: Exposing endpoints.
 
 ---
 
 ## Getting Started
 1.  **Install dependencies**: `pip install -r requirements.txt`
 2.  **Run Tests**: `pytest`
-3.  **Run App**: `uvicorn shipment_qna_bot.api.main:app --reload` (Coming soon)
-
-
-
+3.  **Run App**: `uvicorn shipment_qna_bot.api.main:app --reload`
 ---
