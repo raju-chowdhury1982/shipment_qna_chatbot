@@ -176,14 +176,18 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 # Add human-readable facet summaries
                 facet_summary = ""
                 for field, values in facets.items():
-                    facet_summary += f"{field}: " + ", ".join([f"{v['value']} ({v['count']})" for v in values]) + "\n"
+                    facet_summary += (
+                        f"{field}: "
+                        + ", ".join([f"{v['value']} ({v['count']})" for v in values])
+                        + "\n"
+                    )
                 context_str += f"Status Breakdown: {facet_summary}\n"
 
         # 2. Add Documents Context
         if hits:
             # Swap columns based on orientation
             is_fd = _mentions_final_destination(question)
-            
+
             for i, hit in enumerate(hits[:10]):
                 context_str += f"\n--- Document {i+1} ---\n"
 
@@ -194,25 +198,29 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "po_numbers",
                     "booking_numbers",
                 ]
-                
+
                 if is_fd:
-                    priority_fields.extend([
-                        "final_destination",
-                        "eta_fd_date",
-                        "optimal_eta_fd_date",
-                        "delayed_fd",
-                        "fd_delayed_dur",
-                    ])
+                    priority_fields.extend(
+                        [
+                            "final_destination",
+                            "eta_fd_date",
+                            "optimal_eta_fd_date",
+                            "delayed_fd",
+                            "fd_delayed_dur",
+                        ]
+                    )
                 else:
-                    priority_fields.extend([
-                        "discharge_port",
-                        "eta_dp_date",
-                        "ata_dp_date",
-                        "optimal_ata_dp_date",
-                        "delayed_dp",
-                        "dp_delayed_dur",
-                    ])
-                
+                    priority_fields.extend(
+                        [
+                            "discharge_port",
+                            "eta_dp_date",
+                            "ata_dp_date",
+                            "optimal_ata_dp_date",
+                            "delayed_dp",
+                            "dp_delayed_dur",
+                        ]
+                    )
+
                 priority_fields.append("hot_container_flag")
                 priority_fields.append("empty_container_return_date")
 
@@ -225,7 +233,9 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     try:
                         m = json.loads(str(hit["metadata_json"]))
                         if "milestones" in m:
-                            context_str += f"Milestones: {json.dumps(m['milestones'])}\n"
+                            context_str += (
+                                f"Milestones: {json.dumps(m['milestones'])}\n"
+                            )
                     except:
                         pass
 
@@ -253,7 +263,7 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         is_fd = _mentions_final_destination(question)
         dest_label = "Final Destination" if is_fd else "Discharge Port"
         date_label = "ETA FD" if is_fd else "Arrival Date (ETA/ATA)"
-        
+
         system_prompt = f"""
 Role:
 You are an expert logistics analyst assistant. 
@@ -365,10 +375,10 @@ Result Guidelines:
                 is_fd = _mentions_final_destination(question)
                 dest_col = "final_destination" if is_fd else "discharge_port"
                 date_col = "eta_fd_date" if is_fd else "eta_dp_date"
-                
+
                 header_dest = "Final Destination" if is_fd else "Discharge Port"
                 header_date = "ETA FD" if is_fd else "Arrival (ETA/ATA)"
-                
+
                 lines = [
                     f"| Container | PO Numbers | {header_dest} | {header_date} | Status |",
                     "|---|---|---|---|---|",
@@ -381,25 +391,27 @@ Result Guidelines:
                         po_numbers = ", ".join(sorted(list(set(map(str, po_raw)))))
                     else:
                         po_numbers = str(po_raw)
-                    
+
                     if not po_numbers or po_numbers == "[]":
                         po_numbers = "-"
-                    
+
                     dest_val = h.get(dest_col) or "-"
-                    
+
                     arrival_val = h.get("ata_dp_date") if not is_fd else None
                     if not arrival_val:
                         arrival_val = h.get(date_col)
-                    
+
                     arrival = _fmt_date(arrival_val)
-                    
+
                     status_parts = []
-                    if h.get("hot_container_flag"): status_parts.append("🔥 Hot")
+                    if h.get("hot_container_flag"):
+                        status_parts.append("🔥 Hot")
                     ship_stat = h.get("shipment_status")
-                    if ship_stat: status_parts.append(ship_stat)
-                    
+                    if ship_stat:
+                        status_parts.append(ship_stat)
+
                     status_str = " / ".join(status_parts) if status_parts else "-"
-                    
+
                     lines.append(
                         f"| {container} | {po_numbers} | {dest_val} | {arrival} | {status_str} |"
                     )
@@ -410,7 +422,7 @@ Result Guidelines:
             # --- Structured Table Construction ---
             if hits and len(hits) > 0 and not state.get("table_spec"):
                 is_fd = _mentions_final_destination(question)
-                
+
                 # Deduplicate hits by container_number to avoid multiple rows for same shipment chunks
                 unique_hits = []
                 seen_containers = set()
@@ -426,7 +438,7 @@ Result Guidelines:
                     "final_destination" if is_fd else "discharge_port",
                     "eta_fd_date" if is_fd else "eta_dp_date",
                     "shipment_status",
-                    "hot_container_flag"
+                    "hot_container_flag",
                 ]
                 table_rows: List[Dict[str, Any]] = []
                 for h in unique_hits:
@@ -436,15 +448,20 @@ Result Guidelines:
                         # Format list types (like po_numbers)
                         if isinstance(val, list):
                             val = ", ".join(sorted(list(set(map(str, val)))))
-                        
+
                         # Format dates specifically for the table spec
-                        if c in ["eta_fd_date", "eta_dp_date", "ata_dp_date", "atd_lp_date"]:
+                        if c in [
+                            "eta_fd_date",
+                            "eta_dp_date",
+                            "ata_dp_date",
+                            "atd_lp_date",
+                        ]:
                             val = _fmt_date(val)
-                        
+
                         # Human-readable boolean mapping
                         if c == "hot_container_flag":
                             val = "🔥 PRIORITY" if val else "Normal"
-                        
+
                         row[c] = val
                     table_rows.append(row)
 
@@ -475,7 +492,7 @@ Result Guidelines:
                                 "ata_dp_date",
                                 "eta_fd_date",
                                 "discharge_port",
-                                "hot_container_flag"
+                                "hot_container_flag",
                             ]
                             if h.get(k) is not None
                         ],

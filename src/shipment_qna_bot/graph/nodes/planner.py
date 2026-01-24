@@ -174,13 +174,13 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         container_set = {c for c in containers if c}
         obl_set = {o for o in obl_nos if o}
-        
+
         # Avoid category overlap to prevent 'and' collisions in filters
         if container_set:
             po_numbers = [p for p in po_numbers if p not in container_set]
             booking_numbers = [b for b in booking_numbers if b not in container_set]
             obl_nos = [o for o in obl_nos if o not in container_set]
-        
+
         # If an ID is both a PO and a Booking, we should search both in an 'OR' block
         # to ensure we find it regardless of which field it's actually in.
         shared_ids = set(po_numbers) & set(booking_numbers)
@@ -189,7 +189,13 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
             booking_numbers = [b for b in booking_numbers if b not in shared_ids]
 
         # Booster: if we have specific IDs, make sure they are in query_text
-        all_ids = list(container_set | obl_set | set(po_numbers) | set(booking_numbers) | shared_ids)
+        all_ids = list(
+            container_set
+            | obl_set
+            | set(po_numbers)
+            | set(booking_numbers)
+            | shared_ids
+        )
 
         if all_ids:
             plan["query_text"] = " ".join(all_ids) + " " + plan["query_text"]
@@ -211,7 +217,7 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         if obl_nos:
             filter_clauses.append(_any_in("obl_nos", obl_nos))
-            
+
         if shared_ids:
             # Handle IDs that could be either PO or Booking with an OR
             shared_list = list(shared_ids)
@@ -279,8 +285,8 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
             elif "discharge" in q.lower() or "port" in q.lower():
                 delay_field = "dp_delayed_dur"
             else:
-                delay_field = "any_delay" # Special marker for post-filter or we use OR in extra_filter
-            
+                delay_field = "any_delay"  # Special marker for post-filter or we use OR in extra_filter
+
             if delay_field == "any_delay":
                 # For generic delay, it's better to add to extra_filter as an OR
                 op = ">=" if delay_days else ">"

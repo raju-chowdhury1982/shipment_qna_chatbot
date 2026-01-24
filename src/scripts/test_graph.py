@@ -29,6 +29,7 @@ async def test_trace(question: str, consignee_codes: list[str]):
         final_state = await graph_app.ainvoke(initial_state, config=config)
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         print(f"Graph execution failed: {e}")
         return

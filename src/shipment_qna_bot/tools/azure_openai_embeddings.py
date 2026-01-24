@@ -46,6 +46,23 @@ class AzureOpenAIEmbeddingsClient:
         max_retries = int(os.getenv("AZURE_OPENAI_EMBED_MAX_RETRIES", "5"))
         base_delay = float(os.getenv("AZURE_OPENAI_EMBED_RETRY_DELAY", "1.0"))
         last_error: Exception | None = None
+        transient_markers = [
+            "ratelimit",
+            "rate limit",
+            "429",
+            "timeout",
+            "timed out",
+            "service unavailable",
+            "temporarily unavailable",
+            "500",
+            "502",
+            "503",
+            "504",
+            "connection reset",
+            "connection aborted",
+            "econnreset",
+            "gateway timeout",
+        ]
 
         for attempt in range(1, max_retries + 1):
             try:
@@ -58,7 +75,8 @@ class AzureOpenAIEmbeddingsClient:
             except Exception as e:
                 last_error = e
                 msg = str(e)
-                if "RateLimitReached" in msg or "429" in msg:
+                msg_lower = msg.lower()
+                if any(marker in msg_lower for marker in transient_markers):
                     time.sleep(base_delay * attempt)
                     continue
                 break
