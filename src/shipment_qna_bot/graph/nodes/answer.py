@@ -39,6 +39,7 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         hits = cast(List[Dict[str, Any]], state.get("hits") or [])
         analytics = cast(Dict[str, Any], state.get("idx_analytics") or {})
         question = state.get("question_raw") or ""
+        extracted = cast(Dict[str, Any], state.get("extracted_ids") or {})
 
         if is_test_mode():
             if not hits and not (analytics and (analytics.get("count") or 0) > 0):
@@ -173,6 +174,55 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 rows.append(totals)
 
             return {"rows": rows, "chart_rows": chart_rows, "categories": categories}
+
+        def _normalize_id_list(val: Any) -> List[str]:
+            if val is None:
+                return []
+            if isinstance(val, list):
+                return [str(v).strip().upper() for v in val if str(v).strip()]
+            raw = str(val)
+            parts = [p.strip().upper() for p in raw.split(",") if p.strip()]
+            return parts
+
+        def _hit_has_ids(hit: Dict[str, Any], ids: Dict[str, List[str]]) -> bool:
+            if ids.get("container_number"):
+                hit_container = str(hit.get("container_number") or "").upper()
+                if hit_container and hit_container in ids["container_number"]:
+                    return True
+            if ids.get("po_numbers"):
+                po_list = _normalize_id_list(hit.get("po_numbers"))
+                if set(po_list) & set(ids["po_numbers"]):
+                    return True
+            if ids.get("booking_numbers"):
+                bk_list = _normalize_id_list(hit.get("booking_numbers"))
+                if set(bk_list) & set(ids["booking_numbers"]):
+                    return True
+            if ids.get("obl_nos"):
+                obl_list = _normalize_id_list(hit.get("obl_nos"))
+                if set(obl_list) & set(ids["obl_nos"]):
+                    return True
+            return False
+
+        requested_ids = {
+            "container_number": _normalize_id_list(extracted.get("container_number")),
+            "po_numbers": _normalize_id_list(extracted.get("po_numbers")),
+            "booking_numbers": _normalize_id_list(extracted.get("booking_numbers")),
+            "obl_nos": _normalize_id_list(extracted.get("obl_nos")),
+        }
+
+        if state.get("intent") == "retrieval" and any(requested_ids.values()):
+            filtered_hits = [h for h in hits if _hit_has_ids(h, requested_ids)]
+            if filtered_hits:
+                hits = filtered_hits
+                state["hits"] = hits
+
+        total_count = len(hits)
+        if analytics and analytics.get("count") is not None:
+            try:
+                total_count = int(analytics.get("count") or total_count)
+            except Exception:
+                total_count = len(hits)
+        display_count = min(len(hits), 10)
 
         # Context construction
         context_str = ""
@@ -427,6 +477,21 @@ Result Guidelines:
                     )
                 return "\n".join(lines)
 
+            def _build_count_prefix() -> Optional[str]:
+                po_list = requested_ids.get("po_numbers") or []
+                if not po_list:
+                    return None
+                label = "PO number" if len(po_list) == 1 else "PO numbers"
+                nums = ", ".join(po_list)
+                prefix = f"{total_count} containers are carrying {label} {nums}."
+                if total_count > display_count and display_count > 0:
+                    prefix += f" Showing {display_count} of {total_count} below."
+                return prefix
+
+            count_prefix = _build_count_prefix()
+            if count_prefix:
+                response_text = f"{count_prefix}\n\n{response_text}"
+
             state["answer_text"] = response_text
 
             # --- Structured Table Construction ---
@@ -441,6 +506,14 @@ Result Guidelines:
                     if c_num not in seen_containers:
                         unique_hits.append(h)
                         seen_containers.add(c_num)
+
+                # If a PO/Booking/OBL was requested, keep only matching rows for display.
+                if any(requested_ids.values()):
+                    filtered_unique = [
+                        h for h in unique_hits if _hit_has_ids(h, requested_ids)
+                    ]
+                    if filtered_unique:
+                        unique_hits = filtered_unique
 
                 cols = [
                     "container_number",

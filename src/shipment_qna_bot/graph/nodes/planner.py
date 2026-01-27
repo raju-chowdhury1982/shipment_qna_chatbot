@@ -203,6 +203,7 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         if all_ids:
             plan["query_text"] = " ".join(all_ids) + " " + plan["query_text"]
+            plan["include_total_count"] = True
 
         filter_clauses: List[str] = []
         has_strong_ids = bool(all_ids)

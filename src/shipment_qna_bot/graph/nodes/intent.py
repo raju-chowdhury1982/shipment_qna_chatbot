@@ -1,5 +1,7 @@
 from langchain_core.messages import AIMessage
 
+from shipment_qna_bot.graph.nodes.static_greet_info_handler import \
+    should_handle_overview
 from shipment_qna_bot.graph.state import GraphState
 from shipment_qna_bot.logging.logger import logger
 from shipment_qna_bot.tools.azure_openai_chat import AzureOpenAIChatTool
@@ -22,6 +24,19 @@ def intent_node(state: GraphState) -> GraphState:
     text = state.get("normalized_question", "")
     if not text:
         return {"intent": "end"}
+
+    if should_handle_overview(text):
+        usage_metadata = state.get("usage_metadata") or {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        return {
+            "intent": "company_overview",
+            "sub_intents": ["company_overview"],
+            "sentiment": "neutral",
+            "usage_metadata": usage_metadata,
+        }
 
     if is_test_mode():
         lowered = text.lower()
@@ -71,7 +86,7 @@ def intent_node(state: GraphState) -> GraphState:
     system_prompt = (
         "You are an intent classifier for a Shipment Q&A Bot.\n"
         "Analyze the user's input and extract:\n"
-        "1. Primary Intent: One of ['retrieval', 'analytics', 'greeting', 'end'].\n"
+        "1. Primary Intent: One of ['retrieval', 'analytics', 'greeting', 'company_overview', 'end'].\n"
         "2. All Intents: A list of all applicable intents (include sub-intents such as "
         "['status', 'delay', 'eta_window', 'hot'] when relevant).\n"
         "3. Sentiment: One of ['positive', 'neutral', 'negative'].\n\n"
@@ -118,7 +133,13 @@ def intent_node(state: GraphState) -> GraphState:
             sentiment = "neutral"
 
         # Valid intents check
-        valid_intents = ["retrieval", "analytics", "greeting", "end"]
+        valid_intents = [
+            "retrieval",
+            "analytics",
+            "greeting",
+            "company_overview",
+            "end",
+        ]
         if intent not in valid_intents:
             intent = "retrieval"
 
