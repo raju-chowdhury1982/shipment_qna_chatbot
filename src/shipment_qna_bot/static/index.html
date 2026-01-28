@@ -342,14 +342,35 @@
 
         // Reset session id when the tab/window is closed or refreshed
         window.addEventListener('beforeunload', () => {
-            sessionStorage.removeItem('convId');
+            // We rely on backend session now, which tracks tab state via cookies
         });
 
-        // Persist consignee codes across refreshes
-        const savedConsignee = localStorage.getItem('consigneeCodes') || '';
-        if (savedConsignee) {
-            consigneeInput.value = savedConsignee;
+        // Sync state from server on load
+        async function syncSession() {
+            try {
+                const res = await fetch('/api/session');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.consignee_codes && data.consignee_codes.length > 0) {
+                        consigneeInput.value = data.consignee_codes.join(', ');
+                    } else {
+                        consigneeInput.value = '';
+                    }
+                    if (data.conversation_id) {
+                        conversationId = data.conversation_id;
+                        sessionDisplay.textContent = conversationId;
+                    } else {
+                        // If no session on server, we might still have a local one 
+                        // but it's better to keep it in sync.
+                        sessionDisplay.textContent = conversationId;
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to sync session:", err);
+            }
         }
+
+        syncSession();
 
         async function syncServerInstance() {
             try {
@@ -361,7 +382,13 @@
                 const serverId = data.instance_id || '';
                 const storedId = localStorage.getItem('serverInstanceId') || '';
                 if (serverId && storedId && serverId !== storedId) {
-                    resetChatSession();
+                    // Server restarted, clear everything
+                    conversationId = newConversationId();
+                    sessionDisplay.textContent = conversationId;
+                    consigneeInput.value = '';
+                    chatContainer.innerHTML = '';
+                    chatHistory = [];
+                    addMessage(INITIAL_BOT_MESSAGE, 'bot');
                 }
                 if (serverId) {
                     localStorage.setItem('serverInstanceId', serverId);
@@ -509,9 +536,6 @@
             // Split by comma and clean up
             const codes = consigneeValue.split(',').map(s => s.trim()).filter(s => s !== '');
 
-            // Remember for next time
-            localStorage.setItem('consigneeCodes', codes.join(', '));
-
             // Add user message
             addMessage(text, 'user');
             input.value = '';
@@ -534,6 +558,14 @@
 
                 if (data.answer) {
                     addMessage(data.answer, 'bot', data.metadata, data.table);
+                    if (data.intent === 'end') {
+                        // Session was cleared on backend, let's clear local UI too for next turn
+                        setTimeout(() => {
+                            consigneeInput.value = '';
+                            conversationId = newConversationId();
+                            sessionDisplay.textContent = conversationId;
+                        }, 2000); // Small delay so they can read the goodbye
+                    }
                 } else {
                     addMessage("Sorry, I encountered an error.", 'bot');
                 }

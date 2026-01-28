@@ -22,6 +22,11 @@ _APP_STARTED_AT = datetime.now(timezone.utc).isoformat()
 # loging middleware (trace_id, timing, basic request logs)
 app.add_middleware(RequestLoggingMiddleware)
 
+# Session middleware for backend-driven persistence
+from starlette.middleware.sessions import SessionMiddleware
+
+app.add_middleware(SessionMiddleware, secret_key=_APP_INSTANCE_ID)
+
 # Mount static files
 static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 if os.path.exists(static_dir):
