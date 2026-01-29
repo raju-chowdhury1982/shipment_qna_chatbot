@@ -185,12 +185,19 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
             booking_numbers = [b for b in booking_numbers if b not in container_set]
             obl_nos = [o for o in obl_nos if o not in container_set]
 
-        # If an ID is both a PO and a Booking, we should search both in an 'OR' block
-        # to ensure we find it regardless of which field it's actually in.
-        shared_ids = set(po_numbers) & set(booking_numbers)
-        if shared_ids:
-            po_numbers = [p for p in po_numbers if p not in shared_ids]
-            booking_numbers = [b for b in booking_numbers if b not in shared_ids]
+        # If an ID is shared across multiple ID categories (PO, Booking, OBL),
+        # we should search all of them in an 'OR' block to avoid restrictive 'AND' logic.
+        # Overlap detection:
+        ambiguous_ids = (
+            (set(po_numbers) & set(booking_numbers))
+            | (set(po_numbers) & set(obl_nos))
+            | (set(booking_numbers) & set(obl_nos))
+        )
+
+        if ambiguous_ids:
+            po_numbers = [p for p in po_numbers if p not in ambiguous_ids]
+            booking_numbers = [b for b in booking_numbers if b not in ambiguous_ids]
+            obl_nos = [o for o in obl_nos if o not in ambiguous_ids]
 
         # Booster: if we have specific IDs, make sure they are in query_text
         all_ids = list(
@@ -198,7 +205,7 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
             | obl_set
             | set(po_numbers)
             | set(booking_numbers)
-            | shared_ids
+            | ambiguous_ids
         )
 
         if all_ids:
@@ -223,12 +230,13 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if obl_nos:
             filter_clauses.append(_any_in("obl_nos", obl_nos))
 
-        if shared_ids:
-            # Handle IDs that could be either PO or Booking with an OR
-            shared_list = list(shared_ids)
-            po_part = _any_in("po_numbers", shared_list)
-            bk_part = _any_in("booking_numbers", shared_list)
-            filter_clauses.append(f"({po_part} or {bk_part})")
+        if ambiguous_ids:
+            # Handle IDs that could be any of the ID types with an OR across all 3
+            amb_list = list(ambiguous_ids)
+            po_part = _any_in("po_numbers", amb_list)
+            bk_part = _any_in("booking_numbers", amb_list)
+            ob_part = _any_in("obl_nos", amb_list)
+            filter_clauses.append(f"({po_part} or {bk_part} or {ob_part})")
 
         status_keywords = [s.lower() for s in (extracted.get("status_keywords") or [])]
         status_map = {
