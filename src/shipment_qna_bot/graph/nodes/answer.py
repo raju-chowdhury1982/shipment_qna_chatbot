@@ -243,15 +243,33 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     )
                 context_str += f"Status Breakdown: {facet_summary}\n"
 
+        # Load Ready Reference
+        ready_ref_content = ""
+        try:
+            import os
+            # Try relative path first (assuming running from root)
+            ready_ref_path = "docs/ready_ref.md"
+            if not os.path.exists(ready_ref_path):
+                 # Fallback: try absolute path based on file location
+                 base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+                 ready_ref_path = os.path.join(base_dir, "docs", "ready_ref.md")
+
+            if os.path.exists(ready_ref_path):
+                with open(ready_ref_path, "r") as f:
+                    ready_ref_content = f.read()
+        except Exception:
+            pass  # Fail silently/gracefully
+
         # 2. Add Documents Context
         if hits:
             # Swap columns based on orientation
-            is_fd = _mentions_final_destination(question)
-
+            # Refactor: We now include ALL relevant columns in the context and let the LLM
+            # (guided by ready_ref.md) decide what to focus on.
+            
             for i, hit in enumerate(hits[:10]):
                 context_str += f"\n--- Document {i+1} ---\n"
 
-                # Prioritize key fields based on intent
+                # Prioritize key fields (Unified List)
                 priority_fields = [
                     "container_number",
                     "shipment_status",
@@ -261,42 +279,28 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "final_carrier_name",
                     "first_vessel_name",
                     "final_vessel_name",
+                    # Discharge Port Columns
+                    "discharge_port",
+                    "eta_dp_date",
+                    "ata_dp_date",
+                    "optimal_ata_dp_date",
+                    "delayed_dp",
+                    "dp_delayed_dur",
+                    # Final Destination Columns
+                    "final_destination",
+                    "eta_fd_date",
+                    "optimal_eta_fd_date",
+                    "delayed_fd",
+                    "fd_delayed_dur",
+                    # Numeric details
+                    "cargo_weight_kg",
+                    "cargo_measure_cubic_meter",
+                    "cargo_count",
+                    "cargo_detail_count",
+                    # Priority Flags
+                    "hot_container_flag",
+                    "empty_container_return_date"
                 ]
-
-                if is_fd:
-                    priority_fields.extend(
-                        [
-                            "final_destination",
-                            "eta_fd_date",
-                            "optimal_eta_fd_date",
-                            "delayed_fd",
-                            "fd_delayed_dur",
-                        ]
-                    )
-                else:
-                    priority_fields.extend(
-                        [
-                            "discharge_port",
-                            "eta_dp_date",
-                            "ata_dp_date",
-                            "optimal_ata_dp_date",
-                            "delayed_dp",
-                            "dp_delayed_dur",
-                        ]
-                    )
-
-                # Add numeric details for grounding
-                priority_fields.extend(
-                    [
-                        "cargo_weight_kg",
-                        "cargo_measure_cubic_meter",
-                        "cargo_count",
-                        "cargo_detail_count",
-                    ]
-                )
-
-                priority_fields.append("hot_container_flag")
-                priority_fields.append("empty_container_return_date")
 
                 for f in priority_fields:
                     if f in hit:
@@ -380,6 +384,9 @@ System Instructions:
 
 5. SUMMARY:
    - Briefly summarize key findings (e.g. "5 containers found, 2 are hot/priority").
+
+## Operational Reference (Ready Ref)
+{ready_ref_content}
 """.strip()
 
         if hits and _wants_bucket_chart(question):
