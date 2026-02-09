@@ -84,10 +84,10 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 | `empty_container_dispatch_date` | datetime | Definition for empty container dispatch date. |
 | `empty_container_dispatch_lcn` | string | Definition for empty container dispatch lcn. |
 | `consignee_name` | string | Definition for consignee name. |
-| `optimal_ata_dp_date` | datetime | The best available date for arrival at discharge port, DEFAULT column for arrival/delay calculations unless Final Destination (FD) is specified. |
+| `optimal_ata_dp_date` | datetime | The best available date for arrival at discharge port, **DEFAULT** arrival date for arrival Discharge Port Date and delay calculations unless Final Destination (FD) is specified or requested|
 | `optimal_eta_fd_date` | datetime | The best available date for arrival at final destination. |
-| `delayed_dp` | categorical | Definition for delayed dp. |
-| `dp_delayed_dur` | numeric | Number of days the shipment is delayed at the discharge port. |
+| `delayed_dp` | categorical | Definition for delayed dp and handy filteration for shipment categoriezed as delay, On time or early reached |
+| `dp_delayed_dur` | numeric | Number of days the shipment is delayed/on_time/early at the discharge port. |
 | `delayed_fd` | categorical | Definition for delayed fd. |
 | `fd_delayed_dur` | numeric | Number of days the shipment is delayed at the final destination. |
 | `shipment_status` | categorical | Current phase of the shipment (e.g., DELIVERED, IN_OCEAN, READY_FOR_PICKUP). |
@@ -98,14 +98,16 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 | `port_route_summary` | string | Definition for port route summary. |
 | `source_group` | categorical | Definition for source group. |
 
+
+
 ## 2. Reference Scenarios (Operational Queries)
 
 ### Scenario A: Delayed Shipments (Discharge Port)
 **User Query:** "How many shipments are delayed?" (or "Show delayed shipments")
 **Logic:**
 - Filter: `dp_delayed_dur > 0`
-- Date Column: `predictive_dp_date` (Format: '%d-%b-%Y')
-- Display Protocol: Show container, date, and delay days.
+- Date Column: `optimal_ata_dp_date` (Format: '%d-%b-%Y')
+- Display Protocol: Show container,po_numbers, optimal_ata_dp_date, and delay days.
 
 **Pandas Code:**
 ```python
@@ -113,11 +115,11 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 df_filtered = df[df['dp_delayed_dur'] > 0].copy()
 
 # Format Default Date Column
-if 'predictive_dp_date' in df_filtered.columns:
-    df_filtered['predictive_dp_date'] = df_filtered['predictive_dp_date'].dt.strftime('%d-%b-%Y')
+if 'optimal_ata_dp_date' in df_filtered.columns:
+    df_filtered['optimal_ata_dp_date'] = df_filtered['optimal_ata_dp_date'].dt.strftime('%d-%b-%Y')
 
 # Select Output Columns
-result = df_filtered[['container_number', 'predictive_dp_date', 'dp_delayed_dur', 'shipment_status']]
+result = df_filtered[['container_number', 'po_numbers', 'optimal_ata_dp_date', 'dp_delayed_dur', 'shipment_status']]
 ```
 
 ### Scenario B: Final Destination (FD) Delays
@@ -137,14 +139,14 @@ if 'optimal_eta_fd_date' in df_filtered.columns:
     df_filtered['optimal_eta_fd_date'] = df_filtered['optimal_eta_fd_date'].dt.strftime('%d-%b-%Y')
 
 # Select Output Columns
-result = df_filtered[['container_number', 'optimal_eta_fd_date', 'fd_delayed_dur', 'final_destination']]
+result = df_filtered[['container_number', 'po_numbers', 'optimal_eta_fd_date', 'fd_delayed_dur', 'final_destination']]
 ```
 
 ### Scenario C: Hot / Priority Shipments
 **User Query:** "List hot containers" (or "Show priority shipments")
 **Logic:**
 - Filter: `hot_container_flag == True`
-- Columns: `container_number`, `hot_container_flag`, `shipment_status`
+- Columns: `container_number`,`po_numbers`, `hot_container_flag`, `shipment_status`
 
 **Pandas Code:**
 ```python
@@ -152,5 +154,42 @@ result = df_filtered[['container_number', 'optimal_eta_fd_date', 'fd_delayed_dur
 df_filtered = df[df['hot_container_flag'] == True].copy()
 
 # Select Output Columns
-result = df_filtered[['container_number', 'hot_container_flag', 'shipment_status', 'predictive_dp_date']]
+result = df_filtered[['container_number','po_numbers', 'hot_container_flag', 'shipment_status', 'predictive_dp_date']]
+```
+
+### Scenario D: Delivered Shipments to Consignee (Final Destination)
+**User Query:** "Show delivered shipments to consignee" (or "Delivered to consignee")
+**Logic:**
+- DP Reached: `optimal_ata_dp_date` is not null **and** `< today`.
+- Delivered: `delivery_to_consignee_date` **or** `empty_container_return_date` is not null.
+- Not Delivered: If **both** delivery dates are null, then it is **not** delivered (even if DP reached).
+- Display Protocol: Show container, PO, DP date, delivery/return dates, and status.
+
+**Pandas Code:**
+```python
+# Shipment reached DP (before today) and delivered to consignee
+today = pd.Timestamp.today().normalize()
+
+df_filtered = df[
+    df['optimal_ata_dp_date'].notna() &
+    (df['optimal_ata_dp_date'] < today) &
+    (df['delivery_to_consignee_date'].notna() | df['empty_container_return_date'].notna())
+].copy()
+
+# Format key date columns
+for col in ['optimal_ata_dp_date', 'delivery_to_consignee_date', 'empty_container_return_date']:
+    if col in df_filtered.columns:
+        df_filtered[col] = df_filtered[col].dt.strftime('%d-%b-%Y')
+
+# Select Output Columns
+result = df_filtered[[
+    'container_number',
+    'po_numbers',
+    'discharge_port',
+    'optimal_ata_dp_date',
+    'final_destination',
+    'delivery_to_consignee_date',
+    'empty_container_return_date',
+    'shipment_status'
+]]
 ```
