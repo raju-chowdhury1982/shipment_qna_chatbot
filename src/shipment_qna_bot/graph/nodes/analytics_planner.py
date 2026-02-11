@@ -253,7 +253,28 @@ result = df_filtered[cols]
         exec_result = engine.execute_code(df, generated_code)
 
         if exec_result["success"]:
+            result_type = exec_result.get("result_type")
+            filtered_rows = exec_result.get("filtered_rows")
+            filtered_preview = exec_result.get("filtered_preview") or ""
+
+            logger.info(
+                "Analytics result rows=%s type=%s",
+                filtered_rows,
+                result_type,
+                extra={"step": "NODE:AnalyticsPlanner"},
+            )
+
             final_ans = exec_result.get("final_answer", "")
+
+            if result_type == "bool":
+                if filtered_rows and filtered_rows > 0 and filtered_preview:
+                    final_ans = (
+                        f"Found {filtered_rows} matching shipments.\n\n"
+                        f"{filtered_preview}"
+                    )
+                elif filtered_rows == 0:
+                    final_ans = "No shipments matched your filters."
+
             # Basic formatting if it's just a raw value
             state["answer_text"] = f"Analysis Result:\n{final_ans}"
             state["is_satisfied"] = True

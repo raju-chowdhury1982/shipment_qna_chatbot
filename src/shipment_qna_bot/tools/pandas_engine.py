@@ -60,6 +60,31 @@ class PandasAnalyticsEngine:
 
             output = output_buffer.getvalue()
             result_val = local_scope.get("result")
+            result_type = (
+                type(result_val).__name__ if result_val is not None else "None"
+            )
+
+            filtered_rows = None
+            filtered_preview = ""
+            df_filtered = local_scope.get("df_filtered")
+            if isinstance(df_filtered, pd.DataFrame):
+                filtered_rows = len(df_filtered)
+                if filtered_rows > 0:
+                    preferred_cols = [
+                        "container_number",
+                        "po_numbers",
+                        "optimal_ata_dp_date",
+                        "eta_dp_date",
+                        "eta_fd_date",
+                        "load_port",
+                        "discharge_port",
+                        "final_destination",
+                    ]
+                    cols = [c for c in preferred_cols if c in df_filtered.columns]
+                    preview_df = (
+                        df_filtered[cols].head(50) if cols else df_filtered.head(50)
+                    )
+                    filtered_preview = preview_df.to_markdown(index=False)
 
             # If result is a dataframe or series, convert to something json-serializable/string
             # for the agent to consume easily
@@ -83,6 +108,9 @@ class PandasAnalyticsEngine:
                 "output": output,
                 "result": result_export,
                 "final_answer": final_answer.strip(),
+                "result_type": result_type,
+                "filtered_rows": filtered_rows,
+                "filtered_preview": filtered_preview,
             }
 
         except Exception as e:
