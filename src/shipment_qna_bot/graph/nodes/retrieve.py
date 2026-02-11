@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -126,6 +127,15 @@ def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
     authorized scope. It must NEVER receive raw payload values.
     """
     _sync_ctx(state)
+
+    if state.get("intent") == "analytics":
+        logger.info(
+            "Skipping Azure Search because intent=analytics",
+            extra={"step": "NODE:Retriever"},
+        )
+        state["hits"] = []
+        state["idx_analytics"] = {"count": 0, "facets": None}
+        return state
 
     with log_node_execution(
         "Retrieve",
