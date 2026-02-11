@@ -146,6 +146,7 @@ def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 :120
             ],
         },
+        state_ref=state,
     ):
         plan = state.get("retrieval_plan") or {}  # type: ignore
         consignee_codes = state.get("consignee_codes") or []  # type: ignore
