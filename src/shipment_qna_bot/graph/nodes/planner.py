@@ -56,7 +56,8 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         - final_destination (String): e.g. "Dallas". Use: contains(final_destination, '...')
         - first_vessel_name (String): e.g. "MAERSK SERANGOON". Use: contains(first_vessel_name, '...')
         - final_vessel_name (String): e.g. "BASLE EXPRESS". Use: contains(final_vessel_name, '...')
-        - optimal_ata_dp_date (DateTime): Use for discharge-port arrival windows.
+        - derived_ata_dp_date (DateTime): Primary discharge-port arrival date for arrival windows.
+        - ata_dp_date (DateTime): Fallback actual arrival date at discharge port.
         - optimal_eta_fd_date (DateTime): Use for final-destination arrival windows.
         - dp_delayed_dur (Float): Delay in days at discharge port.
         - fd_delayed_dur (Float): Delay in days at final destination.
@@ -285,22 +286,18 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         post_filter: Dict[str, Any] = {}
         if time_window_days:
-            date_field = (
-                "optimal_eta_fd_date"
-                if _mentions_final_destination(q)
-                else "optimal_ata_dp_date"
-            )
+            is_fd = _mentions_final_destination(q)
+            if is_fd:
+                date_fields = ["optimal_eta_fd_date", "eta_fd_date"]
+            else:
+                date_fields = ["derived_ata_dp_date", "ata_dp_date", "eta_dp_date"]
             post_filter["date_window"] = {
-                "field": date_field,
+                "fields": date_fields,
                 "days": time_window_days,
                 "direction": "next",
             }
             if "order_by" not in plan or not plan["order_by"]:
-                plan["order_by"] = (
-                    "eta_fd_date desc"
-                    if date_field == "optimal_eta_fd_date"
-                    else "eta_dp_date desc"
-                )
+                plan["order_by"] = "eta_fd_date desc" if is_fd else "eta_dp_date desc"
             plan["top_k"] = max(plan.get("top_k", 20), 100)
 
         delay_days = _extract_delay_days(q)

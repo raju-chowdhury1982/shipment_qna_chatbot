@@ -108,9 +108,9 @@ def flatten_document(
         return val
 
     ata_dp_date = (
-        _meta("optimal_ata_dp_date")
+        _meta("derived_ata_dp_date")
         or _meta("ata_dp_date")
-        or _meta("derived_ata_dp_date")
+        or _meta("optimal_ata_dp_date")
     )
     eta_fd_date = _meta("optimal_eta_fd_date") or _meta("eta_fd_date")
     revised_eta = (

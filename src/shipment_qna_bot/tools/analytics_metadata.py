@@ -91,20 +91,20 @@ ANALYTICS_METADATA = {
     #     "type": "datetime"
     # },
     "atd_flp_date": {"desc": "Definition for atd flp date.", "type": "datetime"},
-    # "ata_dp_date": {
-    #     "desc": "Actual Time of Arrival at Discharge Port.",
-    #     "type": "datetime"
-    # },
-    # "derived_ata_dp_date": {
-    #     "desc": "Definition for derived ata dp date.",
-    #     "type": "datetime"
-    # },
+    "ata_dp_date": {
+        "desc": "Actual Time of Arrival at Discharge Port (raw/source ATA).",
+        "type": "datetime",
+    },
+    "derived_ata_dp_date": {
+        "desc": "Canonical discharge-port arrival date. Default for DP arrival and delay analysis.",
+        "type": "datetime",
+    },
     # "revised_eta_fd_date": {
     #     "desc": "Definition for revised eta fd date.",
     #     "type": "datetime"
     # },
     "predictive_dp_date": {
-        "desc": "Predictive Discharge Port Date. DEFAULT column for arrival/delay calculations unless Final Destination (FD) is specified.",
+        "desc": "Predictive Discharge Port Date (legacy/auxiliary).",
         "type": "datetime",
     },
     "cargo_receiveds_date": {
@@ -291,7 +291,7 @@ ANALYTICS_METADATA = {
     },
     "consignee_name": {"desc": "Definition for consignee name.", "type": "string"},
     "optimal_ata_dp_date": {
-        "desc": "The best available date for arrival at discharge port, DEFAULT column for arrival/delay calculations unless Final Destination (FD) is specified.",
+        "desc": "Legacy consolidated discharge-port arrival date (use derived_ata_dp_date as default).",
         "type": "datetime",
     },
     "optimal_eta_fd_date": {
@@ -366,7 +366,7 @@ COLUMN_SYNONYMS = {
     "vessel": "final_vessel_name",
     "status": "shipment_status",
     "shipper": "supplier_vendor_name",
-    "arrival": "optimal_ata_dp_date",
+    "arrival": "derived_ata_dp_date",
     "destination_eta": "optimal_eta_fd_date",
     "delay": "dp_delayed_dur",
     "delivery_delay": "fd_delayed_dur",

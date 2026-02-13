@@ -73,7 +73,8 @@ class PandasAnalyticsEngine:
                     preferred_cols = [
                         "container_number",
                         "po_numbers",
-                        "optimal_ata_dp_date",
+                        "derived_ata_dp_date",
+                        "ata_dp_date",
                         "eta_dp_date",
                         "eta_fd_date",
                         "load_port",

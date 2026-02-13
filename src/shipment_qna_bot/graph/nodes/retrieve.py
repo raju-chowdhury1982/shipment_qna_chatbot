@@ -98,6 +98,24 @@ def _is_filter_safe(filter_str: str) -> bool:
     return True
 
 
+def _normalize_filter_fields(filter_str: str) -> str:
+    """
+    Rewrite legacy/non-indexed date field aliases in OData filters so they remain valid
+    against the Azure Search index schema.
+    """
+    if not filter_str:
+        return filter_str
+    normalized = filter_str
+    field_aliases = {
+        "optimal_ata_dp_date": "ata_dp_date",
+        "derived_ata_dp_date": "ata_dp_date",
+        "optimal_eta_fd_date": "eta_fd_date",
+    }
+    for source_field, target_field in field_aliases.items():
+        normalized = re.sub(rf"\b{re.escape(source_field)}\b", target_field, normalized)
+    return normalized
+
+
 def _sync_ctx(state: Dict[str, Any]) -> None:
     set_log_context(
         conversation_id=state.get("conversation_id", "-"),
@@ -154,6 +172,14 @@ def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
             plan.get("query_text") or state.get("normalized_question") or ""  # type: ignore
         ).strip()  # type: ignore
         extra_filter = (plan.get("extra_filter") or "").strip() or None  # type: ignore
+        if extra_filter:
+            normalized_filter = _normalize_filter_fields(extra_filter)
+            if normalized_filter != extra_filter:
+                logger.info(
+                    f"Normalized filter fields: {extra_filter} -> {normalized_filter}",
+                    extra={"step": "NODE:Retriever"},
+                )
+                extra_filter = normalized_filter
         if extra_filter and not _is_filter_safe(extra_filter):  # type: ignore
             logger.warning(
                 f"Dropping unsafe filter: {extra_filter}",
@@ -227,7 +253,7 @@ def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
         def _hydrate_hit(hit: Dict[str, Any]) -> None:
             meta = _load_metadata(hit)
             for key in [
-                "optimal_ata_dp_date",
+                "derived_ata_dp_date",
                 "optimal_eta_fd_date",
                 "dp_delayed_dur",
                 "fd_delayed_dur",
@@ -237,6 +263,7 @@ def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 "eta_dp_date",
                 "eta_fd_date",
                 "ata_dp_date",
+                "optimal_ata_dp_date",
             ]:
                 if key not in hit and key in meta:
                     hit[key] = meta.get(key)
@@ -259,10 +286,19 @@ def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 ok = True
                 date_window = post_filter.get("date_window")
                 if date_window:
-                    field = date_window.get("field")
+                    fields = date_window.get("fields")
+                    if isinstance(fields, str):
+                        fields = [fields]
+                    if not fields:
+                        legacy_field = date_window.get("field")
+                        fields = [legacy_field] if legacy_field else []
                     days = int(date_window.get("days") or 0)
                     direction = date_window.get("direction", "next")
-                    dt_val = _parse_dt(_get_field(field))
+                    dt_val: Optional[datetime] = None
+                    for field in fields:
+                        dt_val = _parse_dt(_get_field(field))
+                        if dt_val:
+                            break
                     if not dt_val:
                         ok = False
                     elif direction == "next":

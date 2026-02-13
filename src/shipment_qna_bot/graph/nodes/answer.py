@@ -128,9 +128,10 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                         hit.get("optimal_eta_fd_date") or hit.get("eta_fd_date")
                     )
                 return _parse_dt(
-                    hit.get("optimal_ata_dp_date")
-                    or hit.get("eta_dp_date")
+                    hit.get("derived_ata_dp_date")
                     or hit.get("ata_dp_date")
+                    or hit.get("eta_dp_date")
+                    or hit.get("optimal_ata_dp_date")
                 )
 
             rows: List[Dict[str, Any]] = []
@@ -285,9 +286,9 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "final_vessel_name",
                     # Discharge Port Columns
                     "discharge_port",
+                    "derived_ata_dp_date",
                     "eta_dp_date",
                     "ata_dp_date",
-                    "optimal_ata_dp_date",
                     "delayed_dp",
                     "dp_delayed_dur",
                     # Final Destination Columns
@@ -361,7 +362,7 @@ Logistics Concepts:
 - Status vs Milestone: "Current Status" is often the 'shipment_status' field.
 - Hot PO/Container: Indicated by 'hot_container_flag' being true. THESE ARE PRIORITY.
 - ETA DP: Estimated Time of Arrival at Discharge Port.
-- ATA DP: Actual Time of Arrival at Discharge Port (use 'ata_dp_date' field).
+- ATA DP: Actual Time of Arrival at Discharge Port (use 'derived_ata_dp_date' first, fallback 'ata_dp_date').
 - ETA FD: Estimated Time of Arrival at Final Destination (use 'eta_fd_date' field).
 - Delay DP/FD: Use dp_delayed_dur and fd_delayed_dur.
 
@@ -369,7 +370,7 @@ System Instructions:
 1. DATA PRESENTATION (STRICT):
    - If multiple shipments are found, ALWAYS present them in a Markdown Table.
    - TABLE COLUMNS: | Container | PO Numbers | {dest_label} | {date_label} | Status |
-   - ARRIVAL DATE: Use 'ata_dp_date' if available, otherwise 'eta_dp_date'. Format as 'dd-mmm-yy'.
+   - ARRIVAL DATE: Use 'derived_ata_dp_date' if available, otherwise 'ata_dp_date', then 'eta_dp_date'. Format as 'dd-mmm-yy'.
    - STATUS: Mention if "Delayed" or "Hot" in the status column if applicable.
    - HIDE: Do not show 'document_id' or 'doc_id' in the answer.
 
@@ -491,8 +492,14 @@ System Instructions:
 
                     dest_val = h.get(dest_col) or "-"
 
-                    arrival_val = h.get("ata_dp_date") if not is_fd else None
-                    if not arrival_val:
+                    if not is_fd:
+                        arrival_val = (
+                            h.get("derived_ata_dp_date")
+                            or h.get("ata_dp_date")
+                            or h.get(date_col)
+                            or h.get("optimal_ata_dp_date")
+                        )
+                    else:
                         arrival_val = h.get(date_col)
 
                     arrival = _fmt_date(arrival_val)
@@ -561,7 +568,7 @@ System Instructions:
                     "container_number",
                     "po_numbers",
                     "final_destination" if is_fd else "discharge_port",
-                    "eta_fd_date" if is_fd else "eta_dp_date",
+                    "eta_fd_date" if is_fd else "derived_ata_dp_date",
                     "shipment_status",
                     "final_carrier_name",
                     "final_vessel_name",
@@ -572,6 +579,12 @@ System Instructions:
                     row = {}
                     for c in cols:
                         val = h.get(c)
+                        if c == "derived_ata_dp_date" and not val:
+                            val = (
+                                h.get("ata_dp_date")
+                                or h.get("eta_dp_date")
+                                or h.get("optimal_ata_dp_date")
+                            )
                         # Format list types (like po_numbers)
                         if isinstance(val, list):
                             val = ", ".join(sorted(list(set(map(str, val)))))
@@ -580,6 +593,7 @@ System Instructions:
                         if c in [
                             "eta_fd_date",
                             "eta_dp_date",
+                            "derived_ata_dp_date",
                             "ata_dp_date",
                             "atd_lp_date",
                         ]:
@@ -615,6 +629,7 @@ System Instructions:
                             k
                             for k in [
                                 "shipment_status",
+                                "derived_ata_dp_date",
                                 "eta_dp_date",
                                 "ata_dp_date",
                                 "eta_fd_date",

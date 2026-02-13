@@ -159,10 +159,11 @@ Sample Data:
 6. **RELEVANCE:** When returning a DataFrame/table, select only the columns relevant to the user's question.
 7. **DATE FORMATTING:** Whenever displaying or returning a datetime column in a result, ALWAYS use `.dt.strftime('%d-%b-%Y')` to ensure a clean, user-friendly format (e.g., '22-Jul-2025').
 8. **COLUMN SELECTION:**
-   - DEFAULT to using `optimal_ata_dp_date` for arrival/delay calculations (unless value is null, then fall back to `eta_dp_date`).
+   - DEFAULT to using `derived_ata_dp_date` for arrival/delay calculations.
+   - If `derived_ata_dp_date` is null/missing, fall back to `ata_dp_date`, then `eta_dp_date`.
    - ONLY use `etd_fd_date` (or `eta_fd_date`) if the user explicitly asks for "Final Destination" (FD) or "In-CD".
 9. Use `str.contains(..., na=False, case=False, regex=True)` for flexible text filtering.
-9. Return ONLY the code inside a ```python``` block. Explain your logic briefly outside the block.
+10. Return ONLY the code inside a ```python``` block. Explain your logic briefly outside the block.
 
 ## Examples:
 User: "How many delivered shipments?"
@@ -187,11 +188,11 @@ User: "Show me shipments with more than 5 days delay."
 Code:
 ```python
 # Select only relevant columns and format dates
-cols = ['container_number', 'po_numbers', 'eta_dp_date', 'optimal_ata_dp_date', 'dp_delayed_dur', 'discharge_port']
+cols = ['container_number', 'po_numbers', 'eta_dp_date', 'derived_ata_dp_date', 'dp_delayed_dur', 'discharge_port']
 df_filtered = df[df['dp_delayed_dur'] > 5].copy()
 # Apply date formatting
 df_filtered['eta_dp_date'] = df_filtered['eta_dp_date'].dt.strftime('%d-%b-%Y')
-df_filtered['optimal_ata_dp_date'] = df_filtered['optimal_ata_dp_date'].dt.strftime('%d-%b-%Y')
+df_filtered['derived_ata_dp_date'] = df_filtered['derived_ata_dp_date'].dt.strftime('%d-%b-%Y')
 result = df_filtered[cols]
 ```
 

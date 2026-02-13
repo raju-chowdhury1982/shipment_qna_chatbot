@@ -28,7 +28,8 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 | `etd_flp_date` | datetime | Definition for etd flp date. |
 | `eta_dp_date` | datetime | Estimated Time of Arrival at Discharge Port. |
 | `eta_fd_date` | datetime | Estimated Time of Arrival at Final Destination. |
-| `predictive_dp_date` | datetime | **DEFAULT** arrival date. Predictive Discharge Port Date. Use this unless FD is requested. |
+| `ata_dp_date` | datetime | Actual Time of Arrival at Discharge Port (raw/source value). |
+| `derived_ata_dp_date` | datetime | Canonical discharge-port arrival date. **DEFAULT** for arrival and DP delay calculations unless FD is requested. |
 | `atd_flp_date` | datetime | Definition for atd flp date. |
 | `cargo_receiveds_date` | string | Definition for cargo receiveds date. |
 | `detention_free_days` | numeric | Definition for detention free days. |
@@ -84,7 +85,7 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 | `empty_container_dispatch_date` | datetime | Definition for empty container dispatch date. |
 | `empty_container_dispatch_lcn` | string | Definition for empty container dispatch lcn. |
 | `consignee_name` | string | Definition for consignee name. |
-| `optimal_ata_dp_date` | datetime | The best available date for arrival at discharge port, **DEFAULT** arrival date for arrival Discharge Port Date and delay calculations unless Final Destination (FD) is specified or requested|
+| `optimal_ata_dp_date` | datetime | Legacy consolidated arrival date at discharge port (not default). |
 | `optimal_eta_fd_date` | datetime | The best available date for arrival at final destination. |
 | `delayed_dp` | categorical | Definition for delayed dp and handy filteration for shipment categoriezed as delay, On time or early reached |
 | `dp_delayed_dur` | numeric | Number of days the shipment is delayed/on_time/early at the discharge port. |
@@ -106,8 +107,8 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 **User Query:** "How many shipments are delayed?" (or "Show delayed shipments")
 **Logic:**
 - Filter: `dp_delayed_dur > 0`
-- Date Column: `optimal_ata_dp_date` (Format: '%d-%b-%Y')
-- Display Protocol: Show container,po_numbers, optimal_ata_dp_date, and delay days.
+- Date Column: `derived_ata_dp_date` (Format: '%d-%b-%Y')
+- Display Protocol: Show container,po_numbers, derived_ata_dp_date, and delay days.
 
 **Pandas Code:**
 ```python
@@ -115,11 +116,11 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 df_filtered = df[df['dp_delayed_dur'] > 0].copy()
 
 # Format Default Date Column
-if 'optimal_ata_dp_date' in df_filtered.columns:
-    df_filtered['optimal_ata_dp_date'] = df_filtered['optimal_ata_dp_date'].dt.strftime('%d-%b-%Y')
+if 'derived_ata_dp_date' in df_filtered.columns:
+    df_filtered['derived_ata_dp_date'] = df_filtered['derived_ata_dp_date'].dt.strftime('%d-%b-%Y')
 
 # Select Output Columns
-result = df_filtered[['container_number', 'po_numbers', 'optimal_ata_dp_date', 'dp_delayed_dur', 'shipment_status']]
+result = df_filtered[['container_number', 'po_numbers', 'derived_ata_dp_date', 'dp_delayed_dur', 'shipment_status']]
 ```
 
 ### Scenario B: Final Destination (FD) Delays
@@ -160,7 +161,7 @@ result = df_filtered[['container_number','po_numbers', 'hot_container_flag', 'sh
 ### Scenario D: Delivered Shipments to Consignee (Final Destination)
 **User Query:** "Show delivered shipments to consignee" (or "Delivered to consignee")
 **Logic:**
-- DP Reached: `optimal_ata_dp_date` is not null **and** `< today`.
+- DP Reached: `derived_ata_dp_date` is not null **and** `< today`.
 - Delivered: `delivery_to_consignee_date` **or** `empty_container_return_date` is not null.
 - Not Delivered: If **both** delivery dates are null, then it is **not** delivered (even if DP reached).
 - Display Protocol: Show container, PO, DP date, delivery/return dates, and status.
@@ -171,13 +172,13 @@ result = df_filtered[['container_number','po_numbers', 'hot_container_flag', 'sh
 today = pd.Timestamp.today().normalize()
 
 df_filtered = df[
-    df['optimal_ata_dp_date'].notna() &
-    (df['optimal_ata_dp_date'] < today) &
+    df['derived_ata_dp_date'].notna() &
+    (df['derived_ata_dp_date'] < today) &
     (df['delivery_to_consignee_date'].notna() | df['empty_container_return_date'].notna())
 ].copy()
 
 # Format key date columns
-for col in ['optimal_ata_dp_date', 'delivery_to_consignee_date', 'empty_container_return_date']:
+for col in ['derived_ata_dp_date', 'delivery_to_consignee_date', 'empty_container_return_date']:
     if col in df_filtered.columns:
         df_filtered[col] = df_filtered[col].dt.strftime('%d-%b-%Y')
 
@@ -186,7 +187,7 @@ result = df_filtered[[
     'container_number',
     'po_numbers',
     'discharge_port',
-    'optimal_ata_dp_date',
+    'derived_ata_dp_date',
     'final_destination',
     'delivery_to_consignee_date',
     'empty_container_return_date',
@@ -197,7 +198,7 @@ result = df_filtered[[
 ### Scenario E: Next 5-Day Container Schedule (Nashville Example)
 **User Query:** "Next 5 day container schedule for Nashville" (or "shipments coming in next 10 days at Savannah")
 **Logic:**
-- Arrival window based on `optimal_ata_dp_date`
+- Arrival window based on `derived_ata_dp_date`
 - Filter: `discharge_port` contains the city
 - Display Protocol: Show container, PO, arrival date, load port, discharge port.
 
@@ -209,13 +210,13 @@ next_5_days = today + pd.Timedelta(days=5)
 # Filter for shipments with discharge port containing "Nashville" arriving within the next 5 days
 df_filtered = df[
     df['discharge_port'].str.contains('nashville', na=False, case=False) &
-    (df['optimal_ata_dp_date'] >= today) &
-    (df['optimal_ata_dp_date'] <= next_5_days)
+    (df['derived_ata_dp_date'] >= today) &
+    (df['derived_ata_dp_date'] <= next_5_days)
 ].copy()
 
 # Format the arrival date column
-df_filtered['optimal_ata_dp_date'] = df_filtered['optimal_ata_dp_date'].dt.strftime('%d-%b-%Y')
+df_filtered['derived_ata_dp_date'] = df_filtered['derived_ata_dp_date'].dt.strftime('%d-%b-%Y')
 
 # Select relevant columns
-result = df_filtered[['container_number', 'po_numbers', 'load_port', 'discharge_port', 'optimal_ata_dp_date']]
+result = df_filtered[['container_number', 'po_numbers', 'load_port', 'discharge_port', 'derived_ata_dp_date']]
 ```
