@@ -197,7 +197,13 @@ def create_index():
             sortable=True,
         ),
         SearchField(
-            name="revised_eta",
+            name="best_eta_dp_date",
+            type=SearchFieldDataType.DateTimeOffset,
+            filterable=True,
+            sortable=True,
+        ),
+        SearchField(
+            name="best_eta_fd_date",
             type=SearchFieldDataType.DateTimeOffset,
             filterable=True,
             sortable=True,

@@ -112,11 +112,18 @@ def flatten_document(
         or _meta("ata_dp_date")
         or _meta("optimal_ata_dp_date")
     )
+    best_eta_dp_date = (
+        _meta("best_eta_dp_date")
+        or _meta("optimal_ata_dp_date")
+        or _meta("derived_ata_dp_date")
+        or _meta("ata_dp_date")
+    )
     eta_fd_date = _meta("optimal_eta_fd_date") or _meta("eta_fd_date")
-    revised_eta = (
-        _meta("revised_eta")
-        or _meta("revised_eta_date")
+    best_eta_fd_date = (
+        _meta("best_eta_fd_date")
+        or _meta("optimal_eta_fd_date")
         or _meta("revised_eta_fd_date")
+        or _meta("eta_fd_date")
     )
 
     flattened = {
@@ -151,7 +158,8 @@ def flatten_document(
         "etd_flp_date": _normalize_dt(_meta("etd_flp_date")),
         "eta_dp_date": _normalize_dt(_meta("eta_dp_date")),
         "eta_fd_date": _normalize_dt(eta_fd_date),
-        "revised_eta": _normalize_dt(revised_eta),
+        "best_eta_dp_date": _normalize_dt(best_eta_dp_date),
+        "best_eta_fd_date": _normalize_dt(best_eta_fd_date),
         "atd_lp_date": _normalize_dt(_meta("atd_lp_date")),
         "ata_flp_date": _normalize_dt(_meta("ata_flp_date")),
         "atd_flp_date": _normalize_dt(_meta("atd_flp_date")),

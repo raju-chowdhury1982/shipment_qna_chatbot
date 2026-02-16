@@ -175,6 +175,9 @@ def main() -> None:
 
     docs_by_id = _load_jsonl_docs(data_dir)
     jsonl_ids = set(docs_by_id.keys())
+    current_hash_by_id = {
+        doc_id: compute_doc_hash(doc) for doc_id, doc in docs_by_id.items()
+    }
 
     manifest = load_manifest(data_dir)
     manifest_ids = set(manifest.keys())
@@ -187,6 +190,12 @@ def main() -> None:
     extra_in_index = sorted(index_ids - jsonl_ids)
     missing_in_manifest = sorted(jsonl_ids - manifest_ids)
     extra_in_manifest = sorted(manifest_ids - jsonl_ids)
+    changed_by_cdc = sorted(
+        doc_id
+        for doc_id in jsonl_ids
+        if manifest.get(doc_id) != current_hash_by_id[doc_id]
+    )
+    upload_candidates = sorted(set(missing_in_index) | set(changed_by_cdc))
 
     report = {
         "index_name": index_name,
@@ -197,6 +206,8 @@ def main() -> None:
         "extra_in_index": len(extra_in_index),
         "missing_in_manifest": len(missing_in_manifest),
         "extra_in_manifest": len(extra_in_manifest),
+        "changed_by_cdc": len(changed_by_cdc),
+        "upload_candidates": len(upload_candidates),
     }
     report_path = os.path.join(report_dir, "reconcile_report.json")
     with open(report_path, "w", encoding="utf-8") as f:
@@ -206,30 +217,37 @@ def main() -> None:
     extra_index_path = os.path.join(report_dir, "extra_in_index.txt")
     missing_manifest_path = os.path.join(report_dir, "missing_in_manifest.txt")
     extra_manifest_path = os.path.join(report_dir, "extra_in_manifest.txt")
+    changed_cdc_path = os.path.join(report_dir, "changed_by_cdc.txt")
+    upload_candidates_path = os.path.join(report_dir, "upload_candidates.txt")
     _write_id_list(missing_index_path, missing_in_index)
     _write_id_list(extra_index_path, extra_in_index)
     _write_id_list(missing_manifest_path, missing_in_manifest)
     _write_id_list(extra_manifest_path, extra_in_manifest)
+    _write_id_list(changed_cdc_path, changed_by_cdc)
+    _write_id_list(upload_candidates_path, upload_candidates)
 
     print(json.dumps(report, indent=2, sort_keys=True))
     print(f"Missing IDs list: {missing_index_path}")
     print(f"Extra IDs list: {extra_index_path}")
 
-    if args.no_upload or not missing_in_index:
+    if args.no_upload or not upload_candidates:
         return
 
-    print(f"Re-embedding and uploading {len(missing_in_index)} missing docs...")
+    print(
+        f"Re-embedding and upserting {len(upload_candidates)} docs "
+        f"(missing={len(missing_in_index)}, changed={len(changed_by_cdc)})."
+    )
     embedder = AzureOpenAIEmbeddingsClient()
     tool = AzureAISearchTool()
     processed_docs: List[dict] = []
     errors: List[dict] = []
 
-    for i, doc_id in enumerate(missing_in_index, start=1):
+    for i, doc_id in enumerate(upload_candidates, start=1):
         doc = docs_by_id[doc_id]
         try:
             processed_docs.append(flatten_document(doc, embedder))
             if i % 50 == 0:
-                print(f"Processed {i}/{len(missing_in_index)} missing docs...")
+                print(f"Processed {i}/{len(upload_candidates)} upsert docs...")
         except Exception as e:
             errors.append(
                 {
@@ -275,11 +293,11 @@ def main() -> None:
     if args.no_update_manifest:
         return
 
-    new_manifest = {}
-    for doc_id, doc in docs_by_id.items():
-        new_manifest[doc_id] = compute_doc_hash(doc)
+    new_manifest = dict(manifest)
+    for doc_id in upload_candidates:
+        new_manifest[doc_id] = current_hash_by_id[doc_id]
     save_manifest(data_dir, new_manifest)
-    print(f"Manifest rebuilt with {len(new_manifest)} entries.")
+    print(f"Manifest updated with {len(new_manifest)} entries.")
 
 
 if __name__ == "__main__":
