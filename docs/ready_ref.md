@@ -2,6 +2,20 @@
 
 This file serves as a **Ready Reference** for the LLM to understand the dataset schema, column definitions, and how to construct Pandas queries for common operational questions.
 
+## 0. Response Style And Sorting Policy
+
+### Communication Style
+- Tone: soft, calm, respectful.
+- Role: critical thinker.
+- Behavior: acute professional.
+- Keep responses concise, factual, and grounded in the data.
+- If an assumption is used, state it briefly.
+
+### Sorting Policy (Global)
+- For tabular/list outputs with date columns, sort by latest date first (descending) before formatting dates.
+- Date priority for sorting: `best_eta_dp_date` -> `best_eta_fd_date` -> `ata_dp_date` -> `derived_ata_dp_date` -> `eta_dp_date` -> `eta_fd_date`.
+- Apply `.dt.strftime('%d-%b-%Y')` only after sorting.
+
 ## 1. Dataset Columns (Schema)
 
 | Column Name | Type | Description |
@@ -29,7 +43,7 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 | `eta_dp_date` | datetime | Estimated Time of Arrival at Discharge Port. |
 | `eta_fd_date` | datetime | Estimated Time of Arrival at Final Destination. |
 | `ata_dp_date` | datetime | Actual Time of Arrival at Discharge Port (raw/source value). |
-| `derived_ata_dp_date` | datetime | Canonical discharge-port arrival date. **DEFAULT** for arrival and DP delay calculations unless FD is requested. |
+| `best_eta_dp_date` | datetime | Best expected ETA at Discharge Port. **DEFAULT** for DP ETA window and overdue checks. |
 | `atd_flp_date` | datetime | Definition for atd flp date. |
 | `cargo_receiveds_date` | string | Definition for cargo receiveds date. |
 | `detention_free_days` | numeric | Definition for detention free days. |
@@ -86,7 +100,7 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 | `empty_container_dispatch_lcn` | string | Definition for empty container dispatch lcn. |
 | `consignee_name` | string | Definition for consignee name. |
 | `optimal_ata_dp_date` | datetime | Legacy consolidated arrival date at discharge port (not default). |
-| `optimal_eta_fd_date` | datetime | The best available date for arrival at final destination. |
+| `best_eta_fd_date` | datetime | Best expected ETA at final destination. |
 | `delayed_dp` | categorical | Definition for delayed dp and handy filteration for shipment categoriezed as delay, On time or early reached |
 | `dp_delayed_dur` | numeric | Number of days the shipment is delayed/on_time/early at the discharge port. |
 | `delayed_fd` | categorical | Definition for delayed fd. |
@@ -107,8 +121,8 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 **User Query:** "How many shipments are delayed?" (or "Show delayed shipments")
 **Logic:**
 - Filter: `dp_delayed_dur > 0`
-- Date Column: `derived_ata_dp_date` (Format: '%d-%b-%Y')
-- Display Protocol: Show container,po_numbers, derived_ata_dp_date, and delay days.
+- Date Column: `best_eta_dp_date` (Format: '%d-%b-%Y')
+- Display Protocol: Show container,po_numbers, best_eta_dp_date, and delay days.
 
 **Pandas Code:**
 ```python
@@ -116,18 +130,18 @@ This file serves as a **Ready Reference** for the LLM to understand the dataset 
 df_filtered = df[df['dp_delayed_dur'] > 0].copy()
 
 # Format Default Date Column
-if 'derived_ata_dp_date' in df_filtered.columns:
-    df_filtered['derived_ata_dp_date'] = df_filtered['derived_ata_dp_date'].dt.strftime('%d-%b-%Y')
+if 'best_eta_dp_date' in df_filtered.columns:
+    df_filtered['best_eta_dp_date'] = df_filtered['best_eta_dp_date'].dt.strftime('%d-%b-%Y')
 
 # Select Output Columns
-result = df_filtered[['container_number', 'po_numbers', 'derived_ata_dp_date', 'dp_delayed_dur', 'shipment_status']]
+result = df_filtered[['container_number', 'po_numbers', 'best_eta_dp_date', 'dp_delayed_dur', 'shipment_status']]
 ```
 
 ### Scenario B: Final Destination (FD) Delays
 **User Query:** "Show me delayed FD shipments" (or "Check FD delays")
 **Logic:**
 - Filter: `fd_delayed_dur > 0`
-- Date Column: `eta_fd_date` or `optimal_eta_fd_date`
+- Date Column: `eta_fd_date` or `best_eta_fd_date`
 - Display Protocol: Show container, FD date, and FD delay days.
 
 **Pandas Code:**
@@ -136,11 +150,11 @@ result = df_filtered[['container_number', 'po_numbers', 'derived_ata_dp_date', '
 df_filtered = df[df['fd_delayed_dur'] > 0].copy()
 
 # Format FD Date Column
-if 'optimal_eta_fd_date' in df_filtered.columns:
-    df_filtered['optimal_eta_fd_date'] = df_filtered['optimal_eta_fd_date'].dt.strftime('%d-%b-%Y')
+if 'best_eta_fd_date' in df_filtered.columns:
+    df_filtered['best_eta_fd_date'] = df_filtered['best_eta_fd_date'].dt.strftime('%d-%b-%Y')
 
 # Select Output Columns
-result = df_filtered[['container_number', 'po_numbers', 'optimal_eta_fd_date', 'fd_delayed_dur', 'final_destination']]
+result = df_filtered[['container_number', 'po_numbers', 'best_eta_fd_date', 'fd_delayed_dur', 'final_destination']]
 ```
 
 ### Scenario C: Hot / Priority Shipments
@@ -155,13 +169,13 @@ result = df_filtered[['container_number', 'po_numbers', 'optimal_eta_fd_date', '
 df_filtered = df[df['hot_container_flag'] == True].copy()
 
 # Select Output Columns
-result = df_filtered[['container_number','po_numbers', 'hot_container_flag', 'shipment_status', 'predictive_dp_date']]
+result = df_filtered[['container_number','po_numbers', 'hot_container_flag', 'shipment_status', 'best_eta_dp_date']]
 ```
 
 ### Scenario D: Delivered Shipments to Consignee (Final Destination)
 **User Query:** "Show delivered shipments to consignee" (or "Delivered to consignee")
 **Logic:**
-- DP Reached: `derived_ata_dp_date` is not null **and** `< today`.
+- DP Reached: `best_eta_dp_date` is not null **and** `< today`.
 - Delivered: `delivery_to_consignee_date` **or** `empty_container_return_date` is not null.
 - Not Delivered: If **both** delivery dates are null, then it is **not** delivered (even if DP reached).
 - Display Protocol: Show container, PO, DP date, delivery/return dates, and status.
@@ -172,13 +186,13 @@ result = df_filtered[['container_number','po_numbers', 'hot_container_flag', 'sh
 today = pd.Timestamp.today().normalize()
 
 df_filtered = df[
-    df['derived_ata_dp_date'].notna() &
-    (df['derived_ata_dp_date'] < today) &
+    df['best_eta_dp_date'].notna() &
+    (df['best_eta_dp_date'] < today) &
     (df['delivery_to_consignee_date'].notna() | df['empty_container_return_date'].notna())
 ].copy()
 
 # Format key date columns
-for col in ['derived_ata_dp_date', 'delivery_to_consignee_date', 'empty_container_return_date']:
+for col in ['best_eta_dp_date', 'delivery_to_consignee_date', 'empty_container_return_date']:
     if col in df_filtered.columns:
         df_filtered[col] = df_filtered[col].dt.strftime('%d-%b-%Y')
 
@@ -187,7 +201,7 @@ result = df_filtered[[
     'container_number',
     'po_numbers',
     'discharge_port',
-    'derived_ata_dp_date',
+    'best_eta_dp_date',
     'final_destination',
     'delivery_to_consignee_date',
     'empty_container_return_date',
@@ -198,7 +212,7 @@ result = df_filtered[[
 ### Scenario E: Next 5-Day Container Schedule (Nashville Example)
 **User Query:** "Next 5 day container schedule for Nashville" (or "shipments coming in next 10 days at Savannah")
 **Logic:**
-- Arrival window based on `derived_ata_dp_date`
+- Arrival window based on `best_eta_dp_date`
 - Filter: `discharge_port` contains the city
 - Display Protocol: Show container, PO, arrival date, load port, discharge port.
 
@@ -210,13 +224,46 @@ next_5_days = today + pd.Timedelta(days=5)
 # Filter for shipments with discharge port containing "Nashville" arriving within the next 5 days
 df_filtered = df[
     df['discharge_port'].str.contains('nashville', na=False, case=False) &
-    (df['derived_ata_dp_date'] >= today) &
-    (df['derived_ata_dp_date'] <= next_5_days)
+    (df['best_eta_dp_date'] >= today) &
+    (df['best_eta_dp_date'] <= next_5_days)
 ].copy()
 
 # Format the arrival date column
-df_filtered['derived_ata_dp_date'] = df_filtered['derived_ata_dp_date'].dt.strftime('%d-%b-%Y')
+df_filtered['best_eta_dp_date'] = df_filtered['best_eta_dp_date'].dt.strftime('%d-%b-%Y')
 
 # Select relevant columns
-result = df_filtered[['container_number', 'po_numbers', 'load_port', 'discharge_port', 'derived_ata_dp_date']]
+result = df_filtered[['container_number', 'po_numbers', 'load_port', 'discharge_port', 'best_eta_dp_date']]
+```
+
+### Scenario F: Shipment Not Yet Arrived At DP (Missed ETA / Overdue)
+**User Query:** "Which shipments failed to reach DP at Nashville?" (or "not yet arrived at DP in Nashville")
+**Interpretation Rules:**
+- "Not yet arrived at DP": `ata_dp_date` is null.
+- "Failed/missed ETA at DP": `ata_dp_date` is null **and** `best_eta_dp_date <= today`.
+**Logic:**
+- Filter discharge port by location (e.g., Nashville).
+- Keep only records where DP actual arrival is missing.
+- For failed/missed ETA, keep only overdue expected arrivals.
+
+**Pandas Code:**
+```python
+today = pd.Timestamp.today().normalize()
+
+loc_mask = df['discharge_port'].str.contains(
+    pat='nashville', case=False, na=False, regex=True
+)
+not_arrived_mask = df['ata_dp_date'].isna()
+overdue_mask = df['best_eta_dp_date'].notna() & (df['best_eta_dp_date'] <= today)
+
+mask = loc_mask & not_arrived_mask & overdue_mask
+df_filtered = df[mask].copy()
+
+# Sort latest expected arrivals first (current date first)
+df_filtered = df_filtered.sort_values('best_eta_dp_date', ascending=False)
+
+df_filtered['best_eta_dp_date'] = df_filtered['best_eta_dp_date'].dt.strftime('%d-%b-%Y')
+
+result = df_filtered[
+    ['container_number', 'po_numbers', 'load_port', 'discharge_port', 'best_eta_dp_date', 'shipment_status']
+]
 ```

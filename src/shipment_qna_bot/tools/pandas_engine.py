@@ -27,6 +27,34 @@ class PandasAnalyticsEngine:
             "json": json,
         }
 
+    @staticmethod
+    def _sort_df_latest_first(df_in: pd.DataFrame) -> pd.DataFrame:
+        if df_in.empty:
+            return df_in
+        date_priority = [
+            "best_eta_dp_date",
+            "best_eta_fd_date",
+            "ata_dp_date",
+            # "derived_ata_dp_date",
+            "eta_dp_date",
+            "eta_fd_date",
+        ]
+        for col in date_priority:
+            if col not in df_in.columns:
+                continue
+            s = df_in[col]
+            if pd.api.types.is_datetime64_any_dtype(s):
+                return df_in.sort_values(by=col, ascending=False, kind="stable")
+            parsed = pd.to_datetime(s, errors="coerce", utc=True)
+            if parsed.notna().sum() > 0:
+                sorted_df = df_in.copy()
+                sorted_df["_sort_dt_tmp"] = parsed
+                sorted_df = sorted_df.sort_values(
+                    by="_sort_dt_tmp", ascending=False, kind="stable"
+                )
+                return sorted_df.drop(columns=["_sort_dt_tmp"])
+        return df_in
+
     def execute_code(self, df: pd.DataFrame, code: str) -> Dict[str, Any]:
         """
         Executes the provided Python code with the DataFrame `df` in context.
@@ -68,18 +96,22 @@ class PandasAnalyticsEngine:
             filtered_preview = ""
             df_filtered = local_scope.get("df_filtered")
             if isinstance(df_filtered, pd.DataFrame):
+                df_filtered = self._sort_df_latest_first(df_filtered)
+                local_scope["df_filtered"] = df_filtered
                 filtered_rows = len(df_filtered)
                 if filtered_rows > 0:
                     preferred_cols = [
                         "container_number",
                         "po_numbers",
-                        "derived_ata_dp_date",
-                        "ata_dp_date",
-                        "eta_dp_date",
-                        "eta_fd_date",
                         "load_port",
                         "discharge_port",
+                        "eta_dp_date",
+                        "best_eta_dp_date",
+                        "ata_dp_date",
+                        # "derived_ata_dp_date",
                         "final_destination",
+                        "eta_fd_date",
+                        "best_eta_fd_date",
                     ]
                     cols = [c for c in preferred_cols if c in df_filtered.columns]
                     preview_df = (
@@ -97,6 +129,8 @@ class PandasAnalyticsEngine:
                         "result": "",
                         "final_answer": "No rows matched your filters.",
                     }
+                if isinstance(result_val, pd.DataFrame):
+                    result_val = self._sort_df_latest_first(result_val)
                 result_export = result_val.to_markdown()
             else:
                 result_export = str(result_val) if result_val is not None else ""

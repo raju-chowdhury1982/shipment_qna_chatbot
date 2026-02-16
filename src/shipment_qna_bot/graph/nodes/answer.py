@@ -286,6 +286,7 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "final_vessel_name",
                     # Discharge Port Columns
                     "discharge_port",
+                    "best_eta_dp_date",
                     "derived_ata_dp_date",
                     "eta_dp_date",
                     "ata_dp_date",
@@ -293,6 +294,7 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "dp_delayed_dur",
                     # Final Destination Columns
                     "final_destination",
+                    "best_eta_fd_date",
                     "eta_fd_date",
                     "optimal_eta_fd_date",
                     "delayed_fd",
@@ -353,7 +355,7 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         system_prompt = f"""
 Role:
-You are an expert logistics analyst assistant. 
+You are a critical-thinking logistics analyst assistant.
 
 Goal:
 Analyze the provided shipment data to answer user questions accurately.
@@ -370,6 +372,7 @@ System Instructions:
 1. DATA PRESENTATION (STRICT):
    - If multiple shipments are found, ALWAYS present them in a Markdown Table.
    - TABLE COLUMNS: | Container | PO Numbers | {dest_label} | {date_label} | Status |
+   - Sort rows by latest relevant date first (descending).
    - ARRIVAL DATE: Use 'derived_ata_dp_date' if available, otherwise 'ata_dp_date', then 'eta_dp_date'. Format as 'dd-mmm-yy'.
    - STATUS: Mention if "Delayed" or "Hot" in the status column if applicable.
    - HIDE: Do not show 'document_id' or 'doc_id' in the answer.
@@ -389,6 +392,11 @@ System Instructions:
 
 5. SUMMARY:
    - Briefly summarize key findings (e.g. "5 containers found, 2 are hot/priority").
+
+6. STYLE:
+   - Tone: soft, calm, and respectful.
+   - Behavior: acute professional, concise, and factual.
+   - Use critical thinking: if a conclusion depends on an assumption, state it briefly.
 
 ## Operational Reference (Ready Ref)
 {ready_ref_content}
@@ -496,11 +504,12 @@ System Instructions:
                         arrival_val = (
                             h.get("derived_ata_dp_date")
                             or h.get("ata_dp_date")
+                            or h.get("best_eta_dp_date")
                             or h.get(date_col)
                             or h.get("optimal_ata_dp_date")
                         )
                     else:
-                        arrival_val = h.get(date_col)
+                        arrival_val = h.get("best_eta_fd_date") or h.get(date_col)
 
                     arrival = _fmt_date(arrival_val)
 
@@ -564,6 +573,27 @@ System Instructions:
                     if filtered_unique:
                         unique_hits = filtered_unique
 
+                sort_floor = datetime.min.replace(tzinfo=timezone.utc)
+
+                def _row_sort_dt(hit: Dict[str, Any]) -> datetime:
+                    if is_fd:
+                        dt = _parse_dt(
+                            hit.get("best_eta_fd_date")
+                            or hit.get("eta_fd_date")
+                            or hit.get("optimal_eta_fd_date")
+                        )
+                    else:
+                        dt = _parse_dt(
+                            hit.get("best_eta_dp_date")
+                            or hit.get("derived_ata_dp_date")
+                            or hit.get("ata_dp_date")
+                            or hit.get("eta_dp_date")
+                            or hit.get("optimal_ata_dp_date")
+                        )
+                    return dt or sort_floor
+
+                unique_hits.sort(key=_row_sort_dt, reverse=True)
+
                 cols = [
                     "container_number",
                     "po_numbers",
@@ -581,9 +611,16 @@ System Instructions:
                         val = h.get(c)
                         if c == "derived_ata_dp_date" and not val:
                             val = (
-                                h.get("ata_dp_date")
+                                h.get("best_eta_dp_date")
+                                or h.get("ata_dp_date")
                                 or h.get("eta_dp_date")
                                 or h.get("optimal_ata_dp_date")
+                            )
+                        if c == "eta_fd_date" and not val:
+                            val = (
+                                h.get("best_eta_fd_date")
+                                or h.get("optimal_eta_fd_date")
+                                or h.get("eta_fd_date")
                             )
                         # Format list types (like po_numbers)
                         if isinstance(val, list):

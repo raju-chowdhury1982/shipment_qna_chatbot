@@ -1,6 +1,6 @@
-import json
+import json  # type: ignore
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # type: ignore
 
 from shipment_qna_bot.logging.graph_tracing import log_node_execution
 from shipment_qna_bot.logging.logger import logger, set_log_context
@@ -19,21 +19,21 @@ _PANDAS_ENG: Optional[PandasAnalyticsEngine] = None
 def _get_chat() -> AzureOpenAIChatTool:
     global _CHAT_TOOL
     if _CHAT_TOOL is None:
-        _CHAT_TOOL = AzureOpenAIChatTool()
+        _CHAT_TOOL = AzureOpenAIChatTool()  # type: ignore
     return _CHAT_TOOL
 
 
 def _get_blob_manager() -> BlobAnalyticsManager:
     global _BLOB_MGR
     if _BLOB_MGR is None:
-        _BLOB_MGR = BlobAnalyticsManager()
+        _BLOB_MGR = BlobAnalyticsManager()  # type: ignore
     return _BLOB_MGR
 
 
 def _get_pandas_engine() -> PandasAnalyticsEngine:
     global _PANDAS_ENG
     if _PANDAS_ENG is None:
-        _PANDAS_ENG = PandasAnalyticsEngine()
+        _PANDAS_ENG = PandasAnalyticsEngine()  # type: ignore
     return _PANDAS_ENG
 
 
@@ -57,7 +57,7 @@ def analytics_planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         q = (
             state.get("normalized_question") or state.get("question_raw") or ""
         ).strip()
-        consignee_codes = state.get("consignee_codes") or []
+        consignee_codes = state.get("consignee_codes") or []  # type: ignore
 
         # 0. Safety Check
         if not consignee_codes:
@@ -69,7 +69,7 @@ def analytics_planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # 1. Load Data
         try:
             blob_mgr = _get_blob_manager()
-            df = blob_mgr.load_filtered_data(consignee_codes)
+            df = blob_mgr.load_filtered_data(consignee_codes)  # type: ignore
 
             if df.empty:
                 state["answer_text"] = (
@@ -159,11 +159,14 @@ Sample Data:
 6. **RELEVANCE:** When returning a DataFrame/table, select only the columns relevant to the user's question.
 7. **DATE FORMATTING:** Whenever displaying or returning a datetime column in a result, ALWAYS use `.dt.strftime('%d-%b-%Y')` to ensure a clean, user-friendly format (e.g., '22-Jul-2025').
 8. **COLUMN SELECTION:**
-   - DEFAULT to using `derived_ata_dp_date` for arrival/delay calculations.
-   - If `derived_ata_dp_date` is null/missing, fall back to `ata_dp_date`, then `eta_dp_date`.
-   - ONLY use `etd_fd_date` (or `eta_fd_date`) if the user explicitly asks for "Final Destination" (FD) or "In-CD".
+   - For discharge-port ETA/arrival windows and overdue checks, use `best_eta_dp_date` (fallback: `eta_dp_date`).
+   - For actual DP-arrival checks, use `ata_dp_date` (fallback: `derived_ata_dp_date` if needed).
+   - If user asks "not yet arrived at DP": filter `ata_dp_date.isna()`.
+   - If user asks "failed/missed ETA at DP": filter `(ata_dp_date.isna()) & (best_eta_dp_date <= today)`.
+   - For final destination ETA logic, use `best_eta_fd_date` (fallback: `eta_fd_date`).
 9. Use `str.contains(..., na=False, case=False, regex=True)` for flexible text filtering.
-10. Return ONLY the code inside a ```python``` block. Explain your logic briefly outside the block.
+10. **SORTING RULE:** For DataFrame/list outputs containing date columns, sort by latest date first (descending) BEFORE date formatting. Prefer date columns in this order: `best_eta_dp_date`, `best_eta_fd_date`, `ata_dp_date`, `derived_ata_dp_date`, `eta_dp_date`, `eta_fd_date`.
+11. Return ONLY the code inside a ```python``` block. Explain your logic briefly outside the block.
 
 ## Examples:
 User: "How many delivered shipments?"
@@ -188,11 +191,13 @@ User: "Show me shipments with more than 5 days delay."
 Code:
 ```python
 # Select only relevant columns and format dates
-cols = ['container_number', 'po_numbers', 'eta_dp_date', 'derived_ata_dp_date', 'dp_delayed_dur', 'discharge_port']
+cols = ['container_number', 'po_numbers', 'eta_dp_date', 'best_eta_dp_date', 'dp_delayed_dur', 'discharge_port']
 df_filtered = df[df['dp_delayed_dur'] > 5].copy()
+# Sort latest first prior to formatting
+df_filtered = df_filtered.sort_values('best_eta_dp_date', ascending=False)
 # Apply date formatting
 df_filtered['eta_dp_date'] = df_filtered['eta_dp_date'].dt.strftime('%d-%b-%Y')
-df_filtered['derived_ata_dp_date'] = df_filtered['derived_ata_dp_date'].dt.strftime('%d-%b-%Y')
+df_filtered['best_eta_dp_date'] = df_filtered['best_eta_dp_date'].dt.strftime('%d-%b-%Y')
 result = df_filtered[cols]
 ```
 
@@ -277,7 +282,7 @@ result = df_filtered[cols]
                     final_ans = "No shipments matched your filters."
 
             # Basic formatting if it's just a raw value
-            state["answer_text"] = f"Analysis Result:\n{final_ans}"
+            state["answer_text"] = f"Here is what I found:\n{final_ans}"
             state["is_satisfied"] = True
 
             # TODO: If we want to pass chart specs, we'd parse that here.

@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import find_dotenv, load_dotenv
+from dotenv import find_dotenv, load_dotenv  # type: ignore
 
 try:
     from azure.storage.blob import BlobServiceClient
