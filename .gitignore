@@ -22,6 +22,7 @@ docs/
 !docs/
 !docs/overview_info.md
 !docs/ready_ref.md
+!docs/agent_workflow.md
 !docs/.gitkeep
 *.jsonl
 *.json
