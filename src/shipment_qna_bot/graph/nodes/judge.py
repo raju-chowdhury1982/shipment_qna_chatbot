@@ -42,9 +42,10 @@ def judge_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         if state.get("intent") == "analytics":
             answer_lower = answer.lower()
-            has_exec_failure = any(
-                str(err).startswith("Analysis Failed:") for err in errors
-            ) or "i couldn't run that analytics query successfully" in answer_lower
+            has_exec_failure = (
+                any(str(err).startswith("Analysis Failed:") for err in errors)
+                or "i couldn't run that analytics query successfully" in answer_lower
+            )
             if has_exec_failure:
                 state["is_satisfied"] = False
                 state["reflection_feedback"] = state.get("reflection_feedback") or (

@@ -22,7 +22,10 @@ def _has_specific_ids(text: str) -> bool:
     lowered = (text or "").lower()
     if re.search(r"\b[a-z]{4}\d{7}\b", lowered):
         return True
-    if re.search(r"\b(container|po|booking|obl|bol)\s*(number|no|#)?\s*[:\-]?\s*[a-z0-9]{6,}\b", lowered):
+    if re.search(
+        r"\b(container|po|booking|obl|bol)\s*(number|no|#)?\s*[:\-]?\s*[a-z0-9]{6,}\b",
+        lowered,
+    ):
         return True
     return False
 

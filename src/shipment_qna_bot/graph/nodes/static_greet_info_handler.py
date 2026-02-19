@@ -266,9 +266,9 @@ def should_handle_overview(question: str) -> bool:
     if not has_overview_hint:
         return False
 
-    if _contains_any(lowered, _RETRIEVAL_HINTS) and _looks_like_specific_shipment_lookup(
-        lowered
-    ):
+    if _contains_any(
+        lowered, _RETRIEVAL_HINTS
+    ) and _looks_like_specific_shipment_lookup(lowered):
         return False
 
     return True

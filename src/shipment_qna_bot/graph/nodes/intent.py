@@ -45,9 +45,9 @@ def intent_node(state: GraphState) -> GraphState:
                 extra={
                     "extra_data": {
                         "source": overview_source,
-                        "text_snippet": (raw_text if overview_source == "raw" else text)[
-                            :80
-                        ],
+                        "text_snippet": (
+                            raw_text if overview_source == "raw" else text
+                        )[:80],
                     }
                 },
             )

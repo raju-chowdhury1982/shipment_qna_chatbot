@@ -75,7 +75,9 @@ def test_pandas_preflight_rejects_disallowed_import():
     df = pd.DataFrame({"x": [1, 2, 3]})
     engine = PandasAnalyticsEngine()
 
-    result = engine.execute_code(df, "import matplotlib.pyplot as plt\nresult = df['x'].sum()")
+    result = engine.execute_code(
+        df, "import matplotlib.pyplot as plt\nresult = df['x'].sum()"
+    )
 
     assert result["success"] is False
     assert "not allowed" in (result.get("error") or "").lower()
