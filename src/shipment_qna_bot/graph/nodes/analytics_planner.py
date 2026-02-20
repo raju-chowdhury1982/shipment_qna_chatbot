@@ -111,6 +111,157 @@ Error:
     return fixed, resp.get("usage", {}) or {}
 
 
+def _wants_chart(question: str) -> bool:
+    lowered = (question or "").lower()
+    chart_terms = [
+        "chart",
+        "graph",
+        "plot",
+        "bar",
+        "line",
+        "pie",
+        "trend",
+        "visualize",
+        "visualise",
+    ]
+    return any(term in lowered for term in chart_terms)
+
+
+def _chart_kind(question: str) -> str:
+    lowered = (question or "").lower()
+    if any(t in lowered for t in ["pie", "donut", "doughnut"]):
+        return "pie"
+    if any(t in lowered for t in ["line", "trend", "timeline", "over time"]):
+        return "line"
+    return "bar"
+
+
+def _as_float(val: Any) -> Optional[float]:
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    if val is None:
+        return None
+    try:
+        raw = str(val).strip().replace(",", "")
+        if raw.endswith("%"):
+            raw = raw[:-1]
+        if raw == "":
+            return None
+        return float(raw)
+    except Exception:
+        return None
+
+
+def _build_table_spec_from_exec(exec_result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    columns = exec_result.get("result_columns")
+    rows = exec_result.get("result_rows")
+    if not isinstance(columns, list) or not isinstance(rows, list):
+        return None
+    if not columns or not rows:
+        return None
+
+    safe_columns = [str(c) for c in columns]
+    safe_rows: List[Dict[str, Any]] = []
+    for row in rows[:500]:
+        if not isinstance(row, dict):
+            continue
+        safe_row = {col: row.get(col) for col in safe_columns}
+        safe_rows.append(safe_row)
+
+    if not safe_rows:
+        return None
+
+    return {
+        "columns": safe_columns,
+        "rows": safe_rows,
+        "title": "Analytics Result",
+    }
+
+
+def _build_chart_spec_from_table(
+    question: str, table_spec: Optional[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    if not _wants_chart(question):
+        return None
+    if not isinstance(table_spec, dict):
+        return None
+
+    columns = table_spec.get("columns") or []
+    rows = table_spec.get("rows") or []
+    if not isinstance(columns, list) or not isinstance(rows, list):
+        return None
+    if len(columns) < 2 or len(rows) == 0:
+        return None
+
+    sample_rows = [r for r in rows[:80] if isinstance(r, dict)]
+    if not sample_rows:
+        return None
+
+    numeric_cols: List[str] = []
+    categorical_cols: List[str] = []
+    for col in columns:
+        numeric_hits = 0
+        for row in sample_rows:
+            if _as_float(row.get(col)) is not None:
+                numeric_hits += 1
+        if numeric_hits > 0:
+            numeric_cols.append(str(col))
+        else:
+            categorical_cols.append(str(col))
+
+    if not numeric_cols:
+        return None
+
+    kind = _chart_kind(question)
+
+    if kind == "pie":
+        label_col = categorical_cols[0] if categorical_cols else str(columns[0])
+        value_col = (
+            next((c for c in numeric_cols if c != label_col), None) or numeric_cols[0]
+        )
+        chart_data: List[Dict[str, Any]] = []
+        for row in sample_rows[:50]:
+            value = _as_float(row.get(value_col))
+            if value is None:
+                continue
+            label = row.get(label_col)
+            chart_data.append({label_col: str(label) if label is not None else "-", value_col: value})
+        if not chart_data:
+            return None
+        return {
+            "kind": "pie",
+            "title": table_spec.get("title") or "Analytics Pie Chart",
+            "data": chart_data,
+            "encodings": {"label": label_col, "value": value_col},
+        }
+
+    x_col = categorical_cols[0] if categorical_cols else str(columns[0])
+    y_col = next((c for c in numeric_cols if c != x_col), None) or numeric_cols[0]
+
+    chart_data = []
+    for row in sample_rows[:80]:
+        y_val = _as_float(row.get(y_col))
+        if y_val is None:
+            continue
+        point: Dict[str, Any] = {
+            x_col: row.get(x_col),
+            y_col: y_val,
+        }
+        chart_data.append(point)
+
+    if not chart_data:
+        return None
+
+    return {
+        "kind": kind,
+        "title": table_spec.get("title") or "Analytics Chart",
+        "data": chart_data,
+        "encodings": {"x": x_col, "y": y_col},
+    }
+
+
 def analytics_planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Pandas Analyst Agent Node.
@@ -387,7 +538,20 @@ result = df_filtered[cols]
             state["analytics_last_error"] = None
             state["analytics_attempt_count"] = exec_attempts
 
-            # TODO: If we want to pass chart specs, we'd parse that here.
+            table_spec = _build_table_spec_from_exec(exec_result)
+            if table_spec:
+                state["table_spec"] = table_spec
+
+            chart_spec = _build_chart_spec_from_table(q, table_spec)
+            if chart_spec:
+                state["chart_spec"] = chart_spec
+
+            logger.info(
+                "Analytics artifacts generated: table=%s chart=%s",
+                bool(table_spec),
+                chart_spec.get("kind") if isinstance(chart_spec, dict) else None,
+                extra={"step": "NODE:AnalyticsPlanner"},
+            )
         else:
             error_msg = exec_result.get("error")
             logger.warning(f"Pandas Execution Error: {error_msg}")

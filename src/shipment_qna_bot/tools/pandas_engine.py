@@ -186,6 +186,9 @@ class PandasAnalyticsEngine:
 
             # If result is a dataframe or series, convert to something json-serializable/string
             # for the agent to consume easily
+            result_rows: Optional[List[Dict[str, Any]]] = None
+            result_columns: Optional[List[str]] = None
+
             if isinstance(result_val, (pd.DataFrame, pd.Series)):
                 if result_val.empty:
                     return {
@@ -194,9 +197,33 @@ class PandasAnalyticsEngine:
                         "result": "",
                         "final_answer": "No rows matched your filters.",
                     }
-                if isinstance(result_val, pd.DataFrame):
-                    result_val = self._sort_df_latest_first(result_val)
-                result_export = result_val.to_markdown()
+                if isinstance(result_val, pd.Series):
+                    series_name = str(result_val.name or "value")
+                    index_name = str(result_val.index.name or "category")
+                    table_df = result_val.reset_index(name=series_name)
+                    table_df.columns = [index_name, series_name]
+                else:
+                    table_df = self._sort_df_latest_first(result_val)
+
+                table_df = table_df.copy()
+                table_df = table_df.replace({np.nan: None})
+
+                def _to_json_safe(v: Any) -> Any:
+                    if isinstance(v, (pd.Timestamp, pd.Timedelta)):
+                        return str(v)
+                    if hasattr(v, "item"):
+                        try:
+                            return v.item()
+                        except Exception:
+                            return str(v)
+                    return v
+
+                result_columns = [str(c) for c in table_df.columns.tolist()]
+                result_rows = [
+                    {str(k): _to_json_safe(v) for k, v in row.items()}
+                    for row in table_df.to_dict(orient="records")
+                ]
+                result_export = table_df.to_markdown(index=False)
             else:
                 result_export = str(result_val) if result_val is not None else ""
 
@@ -211,6 +238,8 @@ class PandasAnalyticsEngine:
                 "result_type": result_type,
                 "filtered_rows": filtered_rows,
                 "filtered_preview": filtered_preview,
+                "result_columns": result_columns,
+                "result_rows": result_rows,
             }
 
         except Exception as e:
