@@ -154,7 +154,9 @@ def _as_float(val: Any) -> Optional[float]:
         return None
 
 
-def _build_table_spec_from_exec(exec_result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _build_table_spec_from_exec(
+    exec_result: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
     columns = exec_result.get("result_columns")
     rows = exec_result.get("result_rows")
     if not isinstance(columns, list) or not isinstance(rows, list):
@@ -267,7 +269,9 @@ def _build_chart_spec_from_table(
             if value is None:
                 continue
             label = row.get(label_col)
-            chart_data.append({label_col: str(label) if label is not None else "-", value_col: value})
+            chart_data.append(
+                {label_col: str(label) if label is not None else "-", value_col: value}
+            )
         if not chart_data:
             return None
         return {

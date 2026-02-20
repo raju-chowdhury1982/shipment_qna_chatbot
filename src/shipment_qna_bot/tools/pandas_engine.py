@@ -107,7 +107,10 @@ class PandasAnalyticsEngine:
         if isinstance(v, (pd.Timestamp, pd.Timedelta)):
             return str(v)
         if isinstance(v, dict):
-            return {str(k): PandasAnalyticsEngine._to_json_safe_value(val) for k, val in v.items()}
+            return {
+                str(k): PandasAnalyticsEngine._to_json_safe_value(val)
+                for k, val in v.items()
+            }
         if isinstance(v, (list, tuple, set)):
             return [PandasAnalyticsEngine._to_json_safe_value(x) for x in v]
         if hasattr(v, "item"):

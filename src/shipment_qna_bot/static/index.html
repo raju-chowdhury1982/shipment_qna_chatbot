@@ -781,6 +781,10 @@
                         data: values,
                         backgroundColor: kind === 'line' ? 'rgba(77, 163, 255, 0.2)' : colors,
                         borderColor: kind === 'line' ? '#4da3ff' : colors,
+                        hoverBackgroundColor: kind === 'line' ? 'rgba(77, 163, 255, 0.2)' : colors,
+                        hoverBorderColor: kind === 'line' ? '#4da3ff' : colors,
+                        hoverBorderWidth: 2,
+                        hoverOffset: 0,
                         borderWidth: 2,
                         tension: 0.2,
                         fill: kind === 'line'
@@ -789,7 +793,14 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    events: [],
+                    interaction: {
+                        mode: undefined
+                    },
                     plugins: {
+                        tooltip: {
+                            enabled: false
+                        },
                         legend: {
                             display: kind === 'pie',
                             labels: { color: '#e0e0e0' }

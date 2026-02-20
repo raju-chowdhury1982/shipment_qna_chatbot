@@ -85,7 +85,9 @@ def _exec_result_dict():
 
 
 def test_analytics_generates_bar_chart_spec(monkeypatch):
-    df = pd.DataFrame({"discharge_port": ["LOS ANGELES"], "shipment_status": ["IN_OCEAN"]})
+    df = pd.DataFrame(
+        {"discharge_port": ["LOS ANGELES"], "shipment_status": ["IN_OCEAN"]}
+    )
 
     monkeypatch.setattr(analytics_module, "is_test_mode", lambda: False)
     monkeypatch.setattr(
@@ -113,7 +115,9 @@ def test_analytics_generates_bar_chart_spec(monkeypatch):
 
 
 def test_analytics_generates_pie_chart_spec(monkeypatch):
-    df = pd.DataFrame({"discharge_port": ["LOS ANGELES"], "shipment_status": ["IN_OCEAN"]})
+    df = pd.DataFrame(
+        {"discharge_port": ["LOS ANGELES"], "shipment_status": ["IN_OCEAN"]}
+    )
 
     monkeypatch.setattr(analytics_module, "is_test_mode", lambda: False)
     monkeypatch.setattr(
@@ -137,7 +141,9 @@ def test_analytics_generates_pie_chart_spec(monkeypatch):
 
 
 def test_analytics_keeps_table_without_chart_when_not_requested(monkeypatch):
-    df = pd.DataFrame({"discharge_port": ["LOS ANGELES"], "shipment_status": ["IN_OCEAN"]})
+    df = pd.DataFrame(
+        {"discharge_port": ["LOS ANGELES"], "shipment_status": ["IN_OCEAN"]}
+    )
 
     monkeypatch.setattr(analytics_module, "is_test_mode", lambda: False)
     monkeypatch.setattr(
@@ -159,21 +165,27 @@ def test_analytics_keeps_table_without_chart_when_not_requested(monkeypatch):
 
 
 def test_analytics_dict_result_generates_pie_chart(monkeypatch):
-    df = pd.DataFrame({"discharge_port": ["LOS ANGELES"], "shipment_status": ["IN_OCEAN"]})
+    df = pd.DataFrame(
+        {"discharge_port": ["LOS ANGELES"], "shipment_status": ["IN_OCEAN"]}
+    )
 
     monkeypatch.setattr(analytics_module, "is_test_mode", lambda: False)
     monkeypatch.setattr(
         analytics_module, "_get_blob_manager", lambda: _StubBlobManager(df)
     )
     monkeypatch.setattr(
-        analytics_module, "_get_chat", lambda: _StubChatTool("result = {'November 2025': 139, 'December 2025': 160}")
+        analytics_module,
+        "_get_chat",
+        lambda: _StubChatTool("result = {'November 2025': 139, 'December 2025': 160}"),
     )
     monkeypatch.setattr(
         analytics_module, "_get_pandas_engine", lambda: _StubEngine(_exec_result_dict())
     )
 
     new_state = analytics_module.analytics_planner_node(
-        _base_state("show pie chart for containers received november 2025 vs december 2025")
+        _base_state(
+            "show pie chart for containers received november 2025 vs december 2025"
+        )
     )
 
     assert new_state["table_spec"] is not None
