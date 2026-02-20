@@ -158,26 +158,66 @@ def _build_table_spec_from_exec(exec_result: Dict[str, Any]) -> Optional[Dict[st
     columns = exec_result.get("result_columns")
     rows = exec_result.get("result_rows")
     if not isinstance(columns, list) or not isinstance(rows, list):
-        return None
-    if not columns or not rows:
-        return None
+        columns = None
+        rows = None
 
-    safe_columns = [str(c) for c in columns]
-    safe_rows: List[Dict[str, Any]] = []
-    for row in rows[:500]:
-        if not isinstance(row, dict):
-            continue
-        safe_row = {col: row.get(col) for col in safe_columns}
-        safe_rows.append(safe_row)
+    if isinstance(columns, list) and isinstance(rows, list) and columns and rows:
+        safe_columns = [str(c) for c in columns]
+        safe_rows: List[Dict[str, Any]] = []
+        for row in rows[:500]:
+            if not isinstance(row, dict):
+                continue
+            safe_row = {col: row.get(col) for col in safe_columns}
+            safe_rows.append(safe_row)
 
-    if not safe_rows:
-        return None
+        if safe_rows:
+            return {
+                "columns": safe_columns,
+                "rows": safe_rows,
+                "title": "Analytics Result",
+            }
 
-    return {
-        "columns": safe_columns,
-        "rows": safe_rows,
-        "title": "Analytics Result",
-    }
+    result_value = exec_result.get("result_value")
+    if isinstance(result_value, dict) and result_value:
+        dict_rows = [{"label": str(k), "value": v} for k, v in result_value.items()]
+        return {
+            "columns": ["label", "value"],
+            "rows": dict_rows[:500],
+            "title": "Analytics Result",
+        }
+
+    if isinstance(result_value, list) and result_value:
+        first = result_value[0]
+        if isinstance(first, dict):
+            cols: List[str] = []
+            for item in result_value:
+                if not isinstance(item, dict):
+                    continue
+                for key in item.keys():
+                    k = str(key)
+                    if k not in cols:
+                        cols.append(k)
+            if cols:
+                list_rows: List[Dict[str, Any]] = []
+                for item in result_value[:500]:
+                    if not isinstance(item, dict):
+                        continue
+                    list_rows.append({c: item.get(c) for c in cols})
+                if list_rows:
+                    return {
+                        "columns": cols,
+                        "rows": list_rows,
+                        "title": "Analytics Result",
+                    }
+        else:
+            scalar_rows = [{"value": item} for item in result_value[:500]]
+            return {
+                "columns": ["value"],
+                "rows": scalar_rows,
+                "title": "Analytics Result",
+            }
+
+    return None
 
 
 def _build_chart_spec_from_table(

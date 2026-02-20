@@ -102,6 +102,21 @@ class PandasAnalyticsEngine:
                 return sorted_df.drop(columns=["_sort_dt_tmp"])
         return df_in
 
+    @staticmethod
+    def _to_json_safe_value(v: Any) -> Any:
+        if isinstance(v, (pd.Timestamp, pd.Timedelta)):
+            return str(v)
+        if isinstance(v, dict):
+            return {str(k): PandasAnalyticsEngine._to_json_safe_value(val) for k, val in v.items()}
+        if isinstance(v, (list, tuple, set)):
+            return [PandasAnalyticsEngine._to_json_safe_value(x) for x in v]
+        if hasattr(v, "item"):
+            try:
+                return v.item()
+            except Exception:
+                return str(v)
+        return v
+
     def execute_code(self, df: pd.DataFrame, code: str) -> Dict[str, Any]:
         """
         Executes the provided Python code with the DataFrame `df` in context.
@@ -188,6 +203,7 @@ class PandasAnalyticsEngine:
             # for the agent to consume easily
             result_rows: Optional[List[Dict[str, Any]]] = None
             result_columns: Optional[List[str]] = None
+            result_value: Any = None
 
             if isinstance(result_val, (pd.DataFrame, pd.Series)):
                 if result_val.empty:
@@ -208,23 +224,21 @@ class PandasAnalyticsEngine:
                 table_df = table_df.copy()
                 table_df = table_df.replace({np.nan: None})
 
-                def _to_json_safe(v: Any) -> Any:
-                    if isinstance(v, (pd.Timestamp, pd.Timedelta)):
-                        return str(v)
-                    if hasattr(v, "item"):
-                        try:
-                            return v.item()
-                        except Exception:
-                            return str(v)
-                    return v
-
                 result_columns = [str(c) for c in table_df.columns.tolist()]
                 result_rows = [
-                    {str(k): _to_json_safe(v) for k, v in row.items()}
+                    {str(k): self._to_json_safe_value(v) for k, v in row.items()}
                     for row in table_df.to_dict(orient="records")
                 ]
+                result_value = result_rows
                 result_export = table_df.to_markdown(index=False)
+            elif isinstance(result_val, dict):
+                result_value = self._to_json_safe_value(result_val)
+                result_export = str(result_val)
+            elif isinstance(result_val, (list, tuple, set)):
+                result_value = self._to_json_safe_value(result_val)
+                result_export = str(result_val)
             else:
+                result_value = self._to_json_safe_value(result_val)
                 result_export = str(result_val) if result_val is not None else ""
 
             # If no result variable, rely on print output
@@ -240,6 +254,7 @@ class PandasAnalyticsEngine:
                 "filtered_preview": filtered_preview,
                 "result_columns": result_columns,
                 "result_rows": result_rows,
+                "result_value": result_value,
             }
 
         except Exception as e:
