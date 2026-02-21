@@ -1,8 +1,10 @@
+import ast
 import contextlib
 import io
 import json
 import re
 import sys
+import threading
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -27,7 +29,11 @@ class PandasAnalyticsEngine:
             "numpy": np,
             "json": json,
         }
-        self.allowed_import_roots = {"pandas", "numpy", "json"}
+        self.allowed_import_roots = set() # NO IMPORTS ALLOWED AT RUNTIME
+        self.forbidden_attrs = {
+            "__import__", "__builtins__", "eval", "exec", "open", 
+            "system", "subprocess", "globals", "locals"
+        }
 
     @staticmethod
     def _strip_code_fences(code: str) -> str:
@@ -38,35 +44,50 @@ class PandasAnalyticsEngine:
         return cleaned.strip()
 
     def _preflight_validate_code(self, code: str) -> Optional[str]:
-        import_matches = re.findall(
-            r"^\s*(?:from|import)\s+([a-zA-Z_][a-zA-Z0-9_\.]*)",
-            code,
-            flags=re.MULTILINE,
-        )
-        for module_name in import_matches:
-            root = module_name.split(".")[0].lower()
-            if root not in self.allowed_import_roots:
-                return (
-                    f"Import '{module_name}' is not allowed in analytics execution. "
-                    "Use only pandas/numpy/json."
-                )
+        """
+        Hardened validation using AST analysis.
+        """
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return f"Syntax Error in generated code: {e}"
 
-        date_literals = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", code)
-        for token in date_literals:
-            try:
-                pd.Timestamp(token)
-            except Exception:
-                return (
-                    f"Invalid date literal '{token}'. "
-                    "Please use a valid calendar date."
-                )
+        class SecurityVisitor(ast.NodeVisitor):
+            def __init__(self, forbidden_attrs):
+                self.forbidden_attrs = forbidden_attrs
+                self.error = None
 
-        for var in re.findall(r"\bif\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:", code):
-            if var in {"df", "df_filtered", "result"} or var.endswith("_df"):
-                return (
-                    f"Ambiguous truth-value check on '{var}'. "
-                    "Use explicit checks like `.empty`, `.any()`, or `.all()`."
-                )
+            def visit_Import(self, node):
+                self.error = "Import statements are strictly prohibited."
+
+            def visit_ImportFrom(self, node):
+                self.error = "Import statements are strictly prohibited."
+
+            def visit_Attribute(self, node):
+                if node.attr in self.forbidden_attrs or node.attr.startswith("__"):
+                    self.error = f"Access to attribute '{node.attr}' is forbidden."
+                self.generic_visit(node)
+
+            def visit_Name(self, node):
+                if node.id in self.forbidden_attrs:
+                    self.error = f"Use of '{node.id}' is forbidden."
+                self.generic_visit(node)
+
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Name):
+                    if node.func.id in self.forbidden_attrs:
+                         self.error = f"Function call '{node.func.id}' is forbidden."
+                self.generic_visit(node)
+
+        visitor = SecurityVisitor(self.forbidden_attrs)
+        visitor.visit(tree)
+        if visitor.error:
+            return visitor.error
+
+        # Additional regex checks for things AST might miss in strings or edge cases
+        if re.search(r"(__class__|__mro__|__subclasses__|__init__)", code):
+             return "Detected suspicious attribute access (dunder methods)."
+
         return None
 
     @staticmethod
@@ -166,8 +187,20 @@ class PandasAnalyticsEngine:
         }
 
         try:
+            # Create a restricted globals bridge
+            # We explicitly pass our allowed modules into the local scope too
+            safe_globals = {"__builtins__": {
+                "print": print, "range": range, "len": len, "sum": sum, 
+                "min": min, "max": max, "abs": abs, "round": round, "list": list, 
+                "dict": dict, "set": set, "tuple": tuple, "str": str, "int": int, 
+                "float": float, "bool": bool, "enumerate": enumerate, "zip": zip,
+                "any": any, "all": all, "sorted": sorted, "getattr": getattr,
+            }}
+            
             with contextlib.redirect_stdout(output_buffer):
-                exec(code, {}, local_scope)
+                # exec with timeout (simulated as we can't easily kill thread in pure python without signals)
+                # For now, we use a simple try/except and reliance on AST + limited builtins.
+                exec(code, safe_globals, local_scope)
 
             output = output_buffer.getvalue()
             result_val = local_scope.get("result")

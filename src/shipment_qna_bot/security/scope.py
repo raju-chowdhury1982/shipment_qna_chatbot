@@ -90,14 +90,13 @@ def resolve_allowed_scope(
     codes = [c for c in codes if not (c in seen or seen.add(c))]
 
     if not user_identity:
-        logger.warning(
-            "Missing user identity; using payload consignee codes as effective scope."
-        )
-        logger.info(
-            f"Resolved scope for {user_identity}: {codes}",
-            extra={"extra_data": {"scope_count": len(codes)}},
-        )
-        return codes
+        if _ALLOW_UNSAFE_SCOPE:
+            logger.warning(
+                "Missing user identity; ALLOWING payload codes due to unsafe override."
+            )
+            return codes
+        logger.error("Missing user identity; access denied by default.")
+        return []
 
     registry = _load_identity_registry()
     if not registry:
