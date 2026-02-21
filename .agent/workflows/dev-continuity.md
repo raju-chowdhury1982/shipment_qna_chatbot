@@ -8,9 +8,9 @@ Whenever you are tasked with modifying the `shipment_qna_bot` codebase, you MUST
 
 ## 1. PRE-IMPLEMENTATION AUDIT
 Before writing any code, verify:
-- [ ] Is this search or analytics?
-- [ ] If analytics, check `src/shipment_qna_bot/tools/analytics_metadata.py` for column names.
-- [ ] If search, check `src/shipment_qna_bot/graph/nodes/retrieve.py` for `_FILTER_FIELDS`.
+- [x] Is this search or analytics?
+- [x] If analytics, check `src/shipment_qna_bot/tools/analytics_metadata.py` for column names.
+- [x] If search, check `src/shipment_qna_bot/graph/nodes/retrieve.py` for `_FILTER_FIELDS`.
 
 ## 2. THE IER CONSTRAINTS
 
@@ -68,10 +68,10 @@ Before writing any code, verify:
 ## 5. MILESTONE CHECKLIST (Chart + Security, Added 2026-02-20)
 
 ### Non-Negotiable Contract Lock
-- [ ] Keep `ChatAnswer.answer` unchanged as primary text response.
-- [ ] Keep existing response envelope keys unchanged (`conversation_id`, `intent`, `answer`, `notices`, `evidence`, `chart`, `table`, `metadata`).
-- [ ] Preserve frontend request payload shape (`question`, `conversation_id`, `consignee_codes`).
-- [ ] Do not break general/retrieval rendering behavior while adding chart support.
+- [x] Keep `ChatAnswer.answer` unchanged as primary text response.
+- [x] Keep existing response envelope keys unchanged (`conversation_id`, `intent`, `answer`, `notices`, `evidence`, `chart`, `table`, `metadata`).
+- [x] Preserve frontend request payload shape (`question`, `conversation_id`, `consignee_codes`).
+- [x] Do not break general/retrieval rendering behavior while adding chart support.
 
 ### M0: Baseline + Rollback Anchor
 - [ ] Create and record git tag before implementation (`milestone/pre-chart-security-hardening`).
@@ -94,24 +94,24 @@ Before writing any code, verify:
 - Expected impact: Bar/line/pie requests return renderable chart payload consistently.
 
 ### M3: Identity + Scope Hardening (Fail-Closed)
-- [ ] Remove unsafe fallback that accepts payload scope when identity is missing in `src/shipment_qna_bot/security/scope.py`.
-- [ ] Enforce deny-by-default when identity or registry mapping is absent (except explicit controlled dev override).
-- [ ] Add explicit warning/notice for unauthorized scope attempts.
-- [ ] Add regression tests in `tests/test_rls.py` for missing-identity denial path.
+- [x] Remove unsafe fallback that accepts payload scope when identity is missing in `src/shipment_qna_bot/security/scope.py`.
+- [x] Enforce deny-by-default when identity or registry mapping is absent (except explicit controlled dev override).
+- [x] Add explicit warning/notice for unauthorized scope attempts.
+- [x] Add regression tests in `tests/test_rls.py` for missing-identity denial path.
 - Expected impact: Prevents unauthorized data access by payload spoofing.
 
 ### M4: Frontend/HTTP Security Hardening
-- [ ] Sanitize markdown-rendered HTML before DOM insertion in `src/shipment_qna_bot/static/index.html`.
-- [ ] Add secure session/cookie settings in `src/shipment_qna_bot/api/main.py` (HTTPS, httponly, samesite in non-local env).
-- [ ] Add CORS/TrustedHost/HTTPS redirect policy by environment.
-- [ ] Add response security headers (CSP, X-Content-Type-Options, frame protections).
+- [x] Sanitize markdown-rendered HTML before DOM insertion in `src/shipment_qna_bot/static/index.html`.
+- [x] Add secure session/cookie settings in `src/shipment_qna_bot/api/main.py` (HTTPS, httponly, samesite in non-local env).
+- [x] Add CORS/TrustedHost/HTTPS redirect policy by environment.
+- [x] Add response security headers (CSP, X-Content-Type-Options, frame protections).
 - Expected impact: Reduces XSS/session abuse risk significantly.
 
 ### M5: Analytics Execution Hardening
-- [ ] Replace unrestricted `exec` path in `src/shipment_qna_bot/tools/pandas_engine.py` with constrained execution strategy.
-- [ ] Restrict builtins and disallow filesystem/network/process access from generated code.
-- [ ] Add execution timeout/row limits and explicit abort messages.
-- [ ] Add tests for malicious payload attempts (imports, dunder abuse, file/system access).
+- [x] Replace unrestricted `exec` path in `src/shipment_qna_bot/tools/pandas_engine.py` with constrained execution strategy.
+- [x] Restrict builtins and disallow filesystem/network/process access from generated code.
+- [x] Add execution timeout/row limits and explicit abort messages.
+- [x] Add tests for malicious payload attempts (imports, dunder abuse, file/system access).
 - Expected impact: Mitigates high-risk remote code execution vector.
 
 ### M6: Cost/Performance Guardrails

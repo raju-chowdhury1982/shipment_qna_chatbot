@@ -54,42 +54,42 @@ graph LR
 ## Proposed Changes
 
 ### Core API & Security
-#### [MODIFY] [main.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/api/main.py)
-- Replace static `_APP_INSTANCE_ID` session key with a persistent env var.
-- Add `SecureMiddleware` (HTTPS redirect, HSTS).
-- Add `CORSMiddleware` with restricted origins.
-- Add security headers (CSP, X-Content-Type-Options, Frame protection).
+- [x] [MODIFY] [main.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/api/main.py)
+- [x] Replace static `_APP_INSTANCE_ID` session key with a persistent env var.
+- [x] Add `SecureMiddleware` (HTTPS redirect, HSTS).
+- [x] Add `CORSMiddleware` with restricted origins.
+- [x] Add security headers (CSP, X-Content-Type-Options, Frame protection).
 
-#### [MODIFY] [scope.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/security/scope.py)
-- Remove the "missing user identity" fallback that trusts the payload.
-- Enforce strict registry matching.
+- [x] [MODIFY] [scope.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/security/scope.py)
+- [x] Remove the "missing user identity" fallback that trusts the payload.
+- [x] Enforce strict registry matching.
 
 ---
 
 ### Analytics & "BYOD" Engine
-#### [MODIFY] [pandas_engine.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/tools/pandas_engine.py)
-- Replace `exec()` with a safer execution strategy (e.g., using `ast.parse` and a whitelist-recursive-visitor or a restricted sandbox).
-- Add strict execution timeouts.
-- Improve error reporting for LLM-generated logic.
+- [x] [MODIFY] [pandas_engine.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/tools/pandas_engine.py)
+- [x] Replace `exec()` with a safer execution strategy (e.g., using `ast.parse` and a whitelist-recursive-visitor or a restricted sandbox).
+- [x] Add strict execution timeouts.
+- [x] Improve error reporting for LLM-generated logic.
 
-#### [MODIFY] [analytics_planner.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/graph/nodes/analytics_planner.py)
-- Decouple chart generation from text response to ensure `chart_spec` is populated for bar/line requests.
-- Ensure date sorting happens on raw datetime objects, not formatted strings.
-- Improve chart-kind detection and categorical vs numeric heuristics.
+- [x] [MODIFY] [analytics_planner.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/graph/nodes/analytics_planner.py)
+- [x] Decouple chart generation from text response to ensure `chart_spec` is populated for bar/line requests.
+- [x] Ensure date sorting happens on raw datetime objects, not formatted strings.
+- [x] Improve chart-kind detection and categorical vs numeric heuristics.
 
-#### [MODIFY] [intent.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/graph/nodes/intent.py)
-- Fix Issue A: Prevent "praise/feedback" from being classified as `end` intent to stop session resets.
+- [x] [MODIFY] [intent.py](file:///Users/m1air/Desktop/MCS_ChatBot/src/shipment_qna_bot/graph/nodes/intent.py)
+- [x] Fix Issue A: Prevent "praise/feedback" from being classified as `end` intent to stop session resets.
 
 ---
 
 ## Verification Plan
 
 ### Automated Tests
-- `pytest tests/test_pandas_flow.py`: Verify analytics still works after exec() hardening.
-- `pytest tests/test_rls.py`: Verify that missing identity now results in 403/Empty Access.
-- `pytest tests/test_hardening.py`: (New) Verify security headers and session persistence.
+- [x] `pytest tests/test_pandas_flow.py`: Verify analytics still works after exec() hardening.
+- [x] `pytest tests/test_rls.py`: Verify that missing identity now results in 403/Empty Access.
+- [x] `pytest tests/test_hardening.py`: (New) Verify security headers and session persistence.
 
 ### Manual Verification
-- Request a "bar chart" and verify the `data.chart` payload is non-null.
-- Send "Great job!" and verify the session does NOT end.
-- Attempt to inject `__import__('os').system('ls')` in an analytics query and verify it is blocked.
+- [x] Request a "bar chart" and verify the `data.chart` payload is non-null.
+- [x] Send "Great job!" and verify the session does NOT end.
+- [x] Attempt to inject `__import__('os').system('ls')` in an analytics query and verify it is blocked.
