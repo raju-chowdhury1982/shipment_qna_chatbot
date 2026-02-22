@@ -332,9 +332,8 @@ def analytics_planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # 0. Safety Check
         if not consignee_codes:
-            state.setdefault("errors", []).append(
-                "No authorized consignee codes for analytics."
-            )
+            state["answer_text"] = "No consignee codes provided. Please select at least one code to view data."
+            state["is_satisfied"] = True
             return state
 
         # 1. Load Data

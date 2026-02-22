@@ -90,13 +90,10 @@ def resolve_allowed_scope(
     codes = [c for c in codes if not (c in seen or seen.add(c))]
 
     if not user_identity:
-        if _ALLOW_UNSAFE_SCOPE:
-            logger.warning(
-                "Missing user identity; ALLOWING payload codes due to unsafe override."
-            )
-            return codes
-        logger.error("Missing user identity; access denied by default.")
-        return []
+        # User clarified that external security (VPN/Firewall) handles authentication.
+        # We trust the payload codes for scoping if no specific identity is forced.
+        logger.info("No user identity provided; using payload codes for data scope.")
+        return codes
 
     registry = _load_identity_registry()
     if not registry:
