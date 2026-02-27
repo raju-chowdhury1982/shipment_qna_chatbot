@@ -114,20 +114,33 @@ Before writing any code, verify:
 - [x] Add tests for malicious payload attempts (imports, dunder abuse, file/system access).
 - Expected impact: Mitigates high-risk remote code execution vector.
 
-### M6: Cost/Performance Guardrails
-- [ ] Add token budget controls per request and per conversation.
-- [ ] Truncate excessive context payloads before answer generation.
-- [ ] Add circuit-breaker behavior for repeated judge retries on same query.
-- [ ] Track and alert on extreme token/cost requests in logs.
-- Expected impact: Lower latency/cost spikes and better reliability under heavy prompts.
+## 6. ANALYTICS PERFORMANCE & RESOURCE GUARDRAILS (Added 2026-02-27)
 
-### M7: Validation + Release Gate
-- [ ] Run targeted tests:
-  - `pytest tests/test_route_chat.py`
-  - `pytest tests/test_schemas_chat.py`
-  - `pytest tests/test_rls.py`
-  - `pytest tests/test_hardening.py`
-  - `pytest tests/test_pandas_flow.py`
-- [ ] Run manual UAT script: chart request, retrieval request, clarification request, end-session request.
-- [ ] Compare post-change metrics against baseline and approve only if no contract break + security gates pass.
-- Expected impact: Controlled rollout with measurable quality and safety.
+### Caching Strategy (Dual-Layer)
+- **Master Cache**: The daily master dataset is cached as an in-memory singleton in `BlobAnalyticsManager`.
+- **Consignee Cache**: Filtered slices are cached to avoid redundant CPU-heavy filtering.
+- **Maintenance**: Always clear the in-memory singleton (`_MASTER_DF_CACHE = None`) if forcing a manual reload.
+
+### Resilient Column Pruning
+- **Requirement**: Never assume a column in `ANALYTICS_METADATA` exists in the parquet file.
+- **Implementation**: `BlobAnalyticsManager` uses `pyarrow.parquet.read_schema` to intersect requested columns with available ones before `pd.read_parquet`.
+- **Impact**: Prevents `ArrowInvalid` crashes while maintaining low memory footprint.
+
+### Graph Flow Optimization
+- **Bypass Rule**: Analytics queries skip `judge` and `answer` nodes. Flow: `planner` -> `END`.
+- **Retry Policy**: Default `max_retries` is capped at **1** to prevent infinite loops and cost spikes.
+
+### Test Isolation
+- **Suffix Rule**: All test-mode cache files must use the `.test.parquet` suffix (enforced in `BlobAnalyticsManager`).
+- **Safety**: Prevents mock/test data from being accidentally loaded in production environments.
+
+## 7. MILESTONE CHECKLIST (Analytics Optimization, Added 2026-02-27)
+
+### M8: Memory & Latency Lockdown (Complete)
+- [x] Implement in-memory singleton cache for daily master dataset.
+- [x] Implement schema-aware resilient column pruning.
+- [x] Refactor graph to bypass `judge` for analytics path.
+- [x] Reduce graph `max_retries` from 2 to 1.
+- [x] Isolate test/production cache files via filename suffixes.
+- [x] Enforce `black` and `isort` formatting across `src/`.
+- Expected impact: Reduced OOM errors and p95 latency for analytics queries.
