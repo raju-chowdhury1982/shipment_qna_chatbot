@@ -21,16 +21,18 @@ Before writing any code, verify:
 
 ### EXECUTION: Code Generation Rules
 - **OData (Search)**: Absolute prohibition of date math (`now()`, `add`).
-- **Pandas (Analytics)**: Must use `result = ...` assignment. No global side effects.
+- **DuckDB (Analytics)**: Must generate valid SQL queries against the `df` view.
+- **Date Formatting**: ALWAYS use `strftime(column, '%d-%b-%Y')` for user-facing date columns.
 - **Delay Logic**: Default to discharge port (`dp_delayed_dur`).
+- **Scope**: RLS is handled automatically by the engine; queries should focus on business logic.
 
 ### RESULT: Presentation & Grounding
 - All numbers must be grounded in the JSON hits or Pandas dataframes.
 - Use markdown tables for multiple-row outputs.
 
 ## 3. VERIFICATION PROTOCOL
-- Run `pytest tests/test_pandas_flow.py` for analytics changes.
-- Run `pytest tests/test_integration_live.py` for retrieval changes.
+- Run `PYTHONPATH=src pytest tests/test_duckdb_engine.py` for engine changes.
+- Run `PYTHONPATH=src pytest tests/test_integration_live.py` for retrieval changes.
 
 ## 4. OPEN RCA TODO (Added 2026-02-19)
 
@@ -114,17 +116,17 @@ Before writing any code, verify:
 - [x] Add tests for malicious payload attempts (imports, dunder abuse, file/system access).
 - Expected impact: Mitigates high-risk remote code execution vector.
 
-## 6. ANALYTICS PERFORMANCE & RESOURCE GUARDRAILS (Added 2026-02-27)
+## 6. ANALYTICS PERFORMANCE & RESOURCE GUARDRAILS (Updated 2026-02-27)
 
-### Caching Strategy (Dual-Layer)
-- **Master Cache**: The daily master dataset is cached as an in-memory singleton in `BlobAnalyticsManager`.
-- **Consignee Cache**: Filtered slices are cached to avoid redundant CPU-heavy filtering.
-- **Maintenance**: Always clear the in-memory singleton (`_MASTER_DF_CACHE = None`) if forcing a manual reload.
+### DuckDB Direct-Query Strategy
+- **Zero-Load Architecture**: Data is NOT loaded into memory. Queries run directly against Parquet files via `read_parquet`.
+- **View-Based RLS**: The engine creates a temporary view `df` that is already filtered by `consignee_codes` using `list_has_any`.
+- **Memory Efficiency**: Vectorized execution engine ensures low RAM overhead even with multiple concurrent users.
 
-### Resilient Column Pruning
+### Resilient Schema Discovery
 - **Requirement**: Never assume a column in `ANALYTICS_METADATA` exists in the parquet file.
-- **Implementation**: `BlobAnalyticsManager` uses `pyarrow.parquet.read_schema` to intersect requested columns with available ones before `pd.read_parquet`.
-- **Impact**: Prevents `ArrowInvalid` crashes while maintaining low memory footprint.
+- **Implementation**: `DuckDBAnalyticsEngine` uses a `LIMIT 5` query to discover available schema before generation.
+- **Impact**: Prevents SQL errors due to missing columns while providing a data sample for LLM context.
 
 ### Graph Flow Optimization
 - **Bypass Rule**: Analytics queries skip `judge` and `answer` nodes. Flow: `planner` -> `END`.

@@ -428,18 +428,19 @@ Sample Data:
 1. Write valid DuckDB SQL queries. 
 2. Query against the view `df`. `df` is already filtered for the current user's authorized scope.
 3. For "How many" or "Total" questions, use `COUNT(*)` or `SUM()`.
-4. **STRICT RULE:** Never include internal technical columns like {INTERNAL_COLUMNS} in the final output.
-5. **RELEVANCE:** When returning tables, select only the columns relevant to the user's question.
-6. **DATE FORMATTING:** Whenever displaying or returning a date column, ALWAYS use `strftime(column, '%d-%b-%Y')` to ensure a clean, user-friendly format (e.g., '22-Jul-2025').
-7. **COLUMN SELECTION:**
+4. **TYPE CASTING RULE:** If you need to perform math (SUM, AVG, comparisons) on columns specified as 'number' in metadata but stored as strings in the schema (e.g., `cargo_weight_kg`, `teus`), ALWAYS explicitly cast them: `column::DOUBLE`.
+5. **STRICT RULE:** Never include internal technical columns like {INTERNAL_COLUMNS} in the final output.
+6. **RELEVANCE:** When returning tables, select only the columns relevant to the user's question.
+7. **DATE FORMATTING:** Whenever displaying or returning a date column, ALWAYS use `strftime(column, '%d-%b-%Y')` to ensure a clean, user-friendly format (e.g., '22-Jul-2025').
+8. **COLUMN SELECTION:**
    - For discharge-port ETA/arrival windows and overdue checks, use `best_eta_dp_date` (fallback: `eta_dp_date`).
    - For actual DP-arrival checks, use `ata_dp_date` (fallback: `derived_ata_dp_date` if needed).
    - If user asks "not yet arrived at DP": filter `ata_dp_date IS NULL`.
    - If user asks "failed/missed ETA at DP": filter `(ata_dp_date IS NULL) AND (best_eta_dp_date <= CURRENT_DATE)`.
    - For final destination ETA logic, use `best_eta_fd_date` (fallback: `eta_fd_date`).
-8. Use `ILIKE '%pattern%'` for flexible case-insensitive text filtering.
-9. **SORTING RULE:** For results containing date columns, sort by latest date first (DESC) BEFORE formatting if possible, or ensure logical sorting.
-10. Return ONLY the SQL inside a ```sql``` block. Explain your logic briefly outside the block.
+9. Use `ILIKE '%pattern%'` for flexible case-insensitive text filtering.
+10. **SORTING RULE:** For results containing date columns, sort by latest date first (DESC) BEFORE formatting if possible, or ensure logical sorting.
+11. Return ONLY the SQL inside a ```sql``` block. Explain your logic briefly outside the block.
 
 ## Examples:
 User: "How many delivered shipments?"
@@ -451,7 +452,7 @@ SELECT count(*) as total FROM df WHERE shipment_status = 'DELIVERED';
 User: "What is the total weight of my shipments?"
 SQL:
 ```sql
-SELECT sum(cargo_weight_kg) as total_weight FROM df;
+SELECT sum(cargo_weight_kg::DOUBLE) as total_weight FROM df;
 ```
 
 User: "Which carriers are involved?"
@@ -469,36 +470,34 @@ WHERE dp_delayed_dur > 5
 ORDER BY best_eta_dp_date DESC;
 ```
 """
-"""
-
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Question: {q}"},
         ]
 
-        # 3. Generate Code
-        generated_code = ""
+        # 3. Generate SQL
+        generated_sql = ""
         try:
             if is_test_mode():
                 # Mock generation for tests
-                generated_code = "result = 'Mock Answer'"
+                generated_sql = "SELECT count(*) as total FROM df"
             else:
                 chat = _get_chat()
                 resp = chat.chat_completion(messages, temperature=0.0)
                 _merge_usage(state, resp.get("usage"))
                 content = resp.get("content", "")
-                generated_code = _extract_python_code(content)
+                generated_sql = _extract_sql_code(content)
 
         except Exception as e:
-            logger.error(f"LLM Code Gen Failed: {e}")
-            state.setdefault("errors", []).append(f"Code Gen Error: {e}")
+            logger.error(f"LLM SQL Gen Failed: {e}")
+            state.setdefault("errors", []).append(f"SQL Gen Error: {e}")
             state["answer_text"] = (
                 "I couldn't generate the analytics query in time. "
                 "Please narrow the request or try again."
             )
             state["is_satisfied"] = False
             state["reflection_feedback"] = (
-                "Code generation failed; retry analytics with a simpler plan."
+                "SQL generation failed; retry analytics with a simpler plan."
             )
             return state
 
