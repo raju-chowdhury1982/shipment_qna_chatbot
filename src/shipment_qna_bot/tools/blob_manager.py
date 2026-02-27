@@ -45,16 +45,18 @@ class BlobAnalyticsManager:
         return get_today_date()
 
     def _get_cache_path(self, date_str: str) -> str:
-        return os.path.join(self.cache_dir, f"master_{date_str}.parquet")
+        suffix = ".test" if self._test_mode else ""
+        return os.path.join(self.cache_dir, f"master_{date_str}{suffix}.parquet")
 
     def _cleanup_old_cache(self, current_date_str: str):
         """
-        Removes any master_*.parquet files that do not match the current date.
+        Removes any master_*.parquet files that do not match the current date and mode.
         """
+        target_fname = os.path.basename(self._get_cache_path(current_date_str))
         pattern = os.path.join(self.cache_dir, "master_*.parquet")
         for fpath in glob.glob(pattern):
             fname = os.path.basename(fpath)
-            if fname != f"master_{current_date_str}.parquet":
+            if fname != target_fname:
                 try:
                     os.remove(fpath)
                     logger.info(f"Cleaned up old cache file: {fpath}")
