@@ -122,6 +122,13 @@ class BlobAnalyticsManager:
                 os.remove(target_path)
             raise RuntimeError(f"Blob download failed: {e}")
 
+    def get_local_path(self) -> str:
+        """
+        Returns the absolute local path to today's master dataset.
+        Downloads it if not present.
+        """
+        return self.download_master_data()
+
     def load_filtered_data(self, consignee_codes: List[str]) -> pd.DataFrame:
         """
         Loads the master dataset and returns a DataFrame filtered for the given consignee_ids.
