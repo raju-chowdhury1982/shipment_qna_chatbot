@@ -152,13 +152,26 @@ class BlobAnalyticsManager:
 
             # Column Pruning: Load only columns we actually use (metadata + technical keys)
             # This drastically reduces memory footprint.
-            required_cols = list(ANALYTICS_METADATA.keys()) + ["consignee_codes"]
+            requested_cols = list(ANALYTICS_METADATA.keys()) + ["consignee_codes"]
 
             try:
-                # Optimized read with specified columns
-                full_df = pd.read_parquet(file_path, columns=required_cols)
+                # 1. Identify which requested columns actually exist in the file
+                import pyarrow.parquet as pq
 
-                # Global Type Casting (Perform Once per Day)
+                schema = pq.read_schema(file_path)
+                available_cols = set(schema.names)
+                actual_load_cols = [c for c in requested_cols if c in available_cols]
+
+                logger.info(
+                    "Pruning: Requesting %d/%d available columns.",
+                    len(actual_load_cols),
+                    len(available_cols),
+                )
+
+                # 2. Optimized read with valid columns only
+                full_df = pd.read_parquet(file_path, columns=actual_load_cols)
+
+                # Global Type Casting (Perform Once per Day for existing columns)
                 for col, meta in ANALYTICS_METADATA.items():
                     if col in full_df.columns:
                         col_type = meta.get("type")
