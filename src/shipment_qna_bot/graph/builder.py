@@ -4,8 +4,7 @@ from datetime import datetime, timezone
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
-from shipment_qna_bot.graph.nodes.analytics_planner import \
-    analytics_planner_node
+from shipment_qna_bot.graph.nodes.analytics_planner import analytics_planner_node
 from shipment_qna_bot.graph.nodes.answer import answer_node
 from shipment_qna_bot.graph.nodes.clarification import clarification_node
 from shipment_qna_bot.graph.nodes.extractor import extractor_node
@@ -15,8 +14,9 @@ from shipment_qna_bot.graph.nodes.normalizer import normalize_node
 from shipment_qna_bot.graph.nodes.planner import planner_node
 from shipment_qna_bot.graph.nodes.retrieve import retrieve_node
 from shipment_qna_bot.graph.nodes.router import route_node
-from shipment_qna_bot.graph.nodes.static_greet_info_handler import \
-    static_greet_info_node
+from shipment_qna_bot.graph.nodes.static_greet_info_handler import (
+    static_greet_info_node,
+)
 from shipment_qna_bot.graph.state import GraphState
 from shipment_qna_bot.tools.date_tools import get_today_date
 
@@ -30,7 +30,7 @@ def should_continue(state: GraphState):
 
     max_retries = state.get("max_retries")
     if max_retries is None:
-        max_retries = int(os.getenv("GRAPH_MAX_RETRIES", "2"))
+        max_retries = int(os.getenv("GRAPH_MAX_RETRIES", "1"))
 
     if (state.get("retry_count") or 0) >= max_retries:
         return "end"
@@ -85,8 +85,8 @@ def build_graph():
     # Retrieval Flow
     workflow.add_edge("planner", "retrieve")
     workflow.add_edge(
-        "analytics_planner", "judge"
-    )  # Output of analytics is a final answer, skip retrieval/answer
+        "analytics_planner", END
+    )  # Output of analytics is a final answer, skip judge/retrieval
     workflow.add_edge("retrieve", "answer")
     workflow.add_edge("answer", "judge")
     workflow.add_edge("static_info", END)
@@ -125,7 +125,7 @@ def run_graph(input_state: dict) -> dict:
     if "retry_count" not in input_state:
         input_state["retry_count"] = 0
     if "max_retries" not in input_state:
-        input_state["max_retries"] = int(os.getenv("GRAPH_MAX_RETRIES", "2"))
+        input_state["max_retries"] = int(os.getenv("GRAPH_MAX_RETRIES", "1"))
     if "is_satisfied" not in input_state:
         input_state["is_satisfied"] = False
     if "usage_metadata" not in input_state:

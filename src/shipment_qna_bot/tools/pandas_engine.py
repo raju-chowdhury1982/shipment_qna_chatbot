@@ -176,7 +176,8 @@ class PandasAnalyticsEngine:
         # Trap stdout
         output_buffer = io.StringIO()
 
-        working_df = df.copy()
+        # Use df directly. The caller (AnalyticsPlanner) already provides a filtered copy.
+        working_df = df
         for col in self._extract_str_columns(code):
             if col not in working_df.columns:
                 continue
