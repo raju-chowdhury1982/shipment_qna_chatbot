@@ -155,6 +155,11 @@ class AzureAISearchTool:
             "order_by": order_by,
         }
 
+        # Enable Semantic Search if a specific query is provided
+        if query_text and query_text != "*":
+            kwargs["query_type"] = "semantic"
+            kwargs["semantic_configuration_name"] = "default"
+
         if vector is not None and vector:
             if VectorizedQuery is None:
                 raise RuntimeError(
