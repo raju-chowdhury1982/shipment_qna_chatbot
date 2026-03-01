@@ -7,6 +7,7 @@ from shipment_qna_bot.graph.state import GraphState
 from shipment_qna_bot.logging.graph_tracing import log_node_execution
 from shipment_qna_bot.logging.logger import logger
 from shipment_qna_bot.tools.azure_openai_chat import AzureOpenAIChatTool
+from shipment_qna_bot.utils.config import is_chart_enabled, is_weather_enabled
 from shipment_qna_bot.utils.runtime import is_test_mode
 
 _chat_tool: AzureOpenAIChatTool | None = None
@@ -86,9 +87,9 @@ def intent_node(state: GraphState) -> GraphState:
                 intent = "greeting"
             elif any(w in lowered for w in exit_words):
                 intent = "end"
-            elif any(w in lowered for w in analytics_words):
+            elif is_chart_enabled() and any(w in lowered for w in analytics_words):
                 intent = "analytics"
-            elif any(w in lowered for w in weather_words):
+            elif is_weather_enabled() and any(w in lowered for w in weather_words):
                 intent = "retrieval" # Weather is usually an enrichment for retrieval
 
             sub_intents = [intent]
@@ -98,7 +99,7 @@ def intent_node(state: GraphState) -> GraphState:
                 sub_intents.append("delay")
             if "status" in lowered:
                 sub_intents.append("status")
-            if any(w in lowered for w in weather_words):
+            if is_weather_enabled() and any(w in lowered for w in weather_words):
                 sub_intents.append("weather")
 
             # Deduplicate while preserving order
@@ -135,18 +136,26 @@ def intent_node(state: GraphState) -> GraphState:
         import json
         import re
 
+        analytics_instruction = ""
+        if is_chart_enabled():
+            analytics_instruction = "   - 'analytics': Use for general aggregating queries, summaries, counts, or listing distinct values.\n"
+        
+        weather_instruction = ""
+        if is_weather_enabled():
+            weather_instruction = "   - Add 'weather' to the list if the user asks about weather, storm, temperature, or environmental impact.\n"
+
         system_prompt = (
             "You are an intent classifier for a Logistics Shipment Q&A Bot.\n"
             "Analyze the user's input and extract:\n"
             "1. Primary Intent: One of ['retrieval', 'analytics', 'greeting', 'company_overview', 'clarification', 'end'].\n"
-            "   - 'analytics': Use for general aggregating queries, summaries, counts, or listing distinct values.\n"
+            f"{analytics_instruction}"
             "   - 'retrieval': Use for specific single-shipment lookup or asking about status/weather impact for specific shipments.\n"
             "   - 'clarification': Use IF AND ONLY IF the user's query is too vague, ambiguous, or lacks necessary context.\n"
             "   - 'greeting': Use for 'hi', 'hello', etc.\n"
             "   - 'company_overview': Use for questions about the company itself.\n"
             "   - 'end': Use ONLY for explicit farewells.\n"
             "2. All Intents: A list of all applicable intents (include sub-intents like ['status', 'delay', 'weather', 'eta_window', 'hot', 'fd', 'in-cd']).\n"
-            "   - Add 'weather' to the list if the user asks about weather, storm, temperature, or environmental impact.\n"
+            f"{weather_instruction}"
             "3. Sentiment: One of ['positive', 'neutral', 'negative'].\n\n"
             "Output JSON ONLY:\n"
             "{\n"

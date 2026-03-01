@@ -14,6 +14,7 @@ from shipment_qna_bot.logging.logger import logger, set_log_context
 from shipment_qna_bot.tools.azure_ai_search import AzureAISearchTool
 from shipment_qna_bot.tools.azure_openai_embeddings import AzureOpenAIEmbeddingsClient
 from shipment_qna_bot.tools.weather_tool import WeatherTool
+from shipment_qna_bot.utils.config import is_weather_enabled
 from shipment_qna_bot.utils.runtime import is_test_mode
 
 _SEARCH: Optional[AzureAISearchTool] = None
@@ -150,7 +151,7 @@ def _fetch_weather_alerts(hits: list[Dict[str, Any]], state: Dict[str, Any]) -> 
     """
     Fetches weather for unique locations in hits and adds to state['notices'].
     """
-    if "weather" not in (state.get("sub_intents") or []):
+    if not is_weather_enabled() or "weather" not in (state.get("sub_intents") or []):
         return
 
     locations = set()
