@@ -13,10 +13,12 @@ from shipment_qna_bot.logging.graph_tracing import log_node_execution
 from shipment_qna_bot.logging.logger import logger, set_log_context
 from shipment_qna_bot.tools.azure_ai_search import AzureAISearchTool
 from shipment_qna_bot.tools.azure_openai_embeddings import AzureOpenAIEmbeddingsClient
+from shipment_qna_bot.tools.weather_tool import WeatherTool
 from shipment_qna_bot.utils.runtime import is_test_mode
 
 _SEARCH: Optional[AzureAISearchTool] = None
 _EMBED: Optional[AzureOpenAIEmbeddingsClient] = None
+_WEATHER: Optional[WeatherTool] = None
 
 _FILTER_FIELDS = {
     "container_number",
@@ -135,6 +137,42 @@ def _get_embedder() -> AzureOpenAIEmbeddingsClient:
     if _EMBED is None:
         _EMBED = AzureOpenAIEmbeddingsClient()  # type: ignore
     return _EMBED
+
+
+def _get_weather_tool() -> WeatherTool:
+    global _WEATHER
+    if _WEATHER is None:
+        _WEATHER = WeatherTool()
+    return _WEATHER
+
+
+def _fetch_weather_alerts(hits: list[Dict[str, Any]], state: Dict[str, Any]) -> None:
+    """
+    Fetches weather for unique locations in hits and adds to state['notices'].
+    """
+    if "weather" not in (state.get("sub_intents") or []):
+        return
+
+    locations = set()
+    for h in hits[:5]:  # Check top 5 hits for locations
+        for field in ["discharge_port", "final_destination", "load_port"]:
+            loc = h.get(field)
+            if loc and isinstance(loc, str) and len(loc) > 2:
+                locations.add(loc.strip().upper())
+
+    if not locations:
+        return
+
+    weather_tool = _get_weather_tool()
+    for loc in sorted(list(locations))[:3]:  # Limit to 3 unique locations per query
+        res = weather_tool.get_weather_for_location(loc)
+        if res:
+            condition = res.get("condition", "Unknown")
+            temp = res.get("temp")
+            wind = res.get("windspeed")
+            msg = f"Weather Update for {res['location']} ({res.get('country','')}): {condition}, {temp}°C, Wind: {wind}km/h."
+            state.setdefault("notices", []).append(msg)
+            logger.info(f"Added weather notice for {loc}")
 
 
 def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -355,6 +393,10 @@ def retrieve_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 f"Retrieved {len(hits)} hits for query=<{query_text}>",
                 extra={"step": "NODE:Retriever"},
             )
+
+            # Weather Enrichment
+            _fetch_weather_alerts(hits, state)
+
         except Exception as e:
             error_msg = str(e)
             if extra_filter and (

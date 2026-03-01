@@ -335,11 +335,14 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
             pagination_hint = f"There are {top_count} total results matching your query. Ask 'show more' or 'next page' to see more."
             context_str += f"\nNOTE: {pagination_hint}\n"
 
-        # 3. Add Current Date Context
+        # 3. Add Current Date and Alerts Context
         today_str = state.get("today_date") or get_today_date()
-        context_str += (
-            f"\n--- System Information ---\nCurrent Date (UTC): {today_str}\n"
-        )
+        notices = state.get("notices") or []
+        context_str += f"\n--- System Information ---\nCurrent Date (UTC): {today_str}\n"
+        if notices:
+            context_str += "\n--- Active Notices/Alerts ---\n"
+            for n in notices:
+                context_str += f"NOTE: {n}\n"
 
         # If no info at all
         if not hits and not (analytics and (analytics.get("count") or 0) > 0):
