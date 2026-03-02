@@ -339,7 +339,9 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # 3. Add Current Date and Alerts Context
         today_str = state.get("today_date") or get_today_date()
         notices = state.get("notices") or []
-        context_str += f"\n--- System Information ---\nCurrent Date (UTC): {today_str}\n"
+        context_str += (
+            f"\n--- System Information ---\nCurrent Date (UTC): {today_str}\n"
+        )
         if notices:
             context_str += "\n--- Active Notices/Alerts ---\n"
             for n in notices:
@@ -380,13 +382,6 @@ System Instructions:
    - ARRIVAL DATE: Use 'derived_ata_dp_date' if available, otherwise 'ata_dp_date', then 'eta_dp_date'. Format as 'dd-mmm-yy'.
    - STATUS: Mention if "Delayed" or "Hot" in the status column if applicable.
    - HIDE: Do not show 'document_id' or 'doc_id' in the answer.
-"""
-
-        if not is_chart_enabled():
-            system_prompt = system_prompt.replace(
-                "1. DATA PRESENTATION (STRICT):\n   - If multiple shipments are found, ALWAYS present them in a Markdown Table.\n   - TABLE COLUMNS: | Container | PO Numbers | {dest_label} | {date_label} | Status |\n   - Sort rows by latest relevant date first (descending).\n   - ARRIVAL DATE: Use 'derived_ata_dp_date' if available, otherwise 'ata_dp_date', then 'eta_dp_date'. Format as 'dd-mmm-yy'.\n   - STATUS: Mention if \"Delayed\" or \"Hot\" in the status column if applicable.\n   - HIDE: Do not show 'document_id' or 'doc_id' in the answer.\n",
-                "1. DATA PRESENTATION: Provide a concise list of shipments. Use sorting by date (descending).\n"
-            )
 
 2. NUMERIC & LOGISTICS DETAILS (IMPORTANT):
    - Always report Weight (cargo_weight_kg), Volume (cargo_measure_cubic_meter), and counts if requested.
@@ -412,6 +407,12 @@ System Instructions:
 ## Operational Reference (Ready Ref)
 {ready_ref_content}
 """.strip()
+
+        if not is_chart_enabled():
+            system_prompt = system_prompt.replace(
+                "1. DATA PRESENTATION (STRICT):\n   - If multiple shipments are found, ALWAYS present them in a Markdown Table.\n   - TABLE COLUMNS: | Container | PO Numbers | {dest_label} | {date_label} | Status |\n   - Sort rows by latest relevant date first (descending).\n   - ARRIVAL DATE: Use 'derived_ata_dp_date' if available, otherwise 'ata_dp_date', then 'eta_dp_date'. Format as 'dd-mmm-yy'.\n   - STATUS: Mention if \"Delayed\" or \"Hot\" in the status column if applicable.\n   - HIDE: Do not show 'document_id' or 'doc_id' in the answer.",
+                "1. DATA PRESENTATION: Provide a concise list of shipments. Use sorting by date (descending).",
+            )
 
         if hits and _wants_bucket_chart(question) and is_chart_enabled():
             bucket_spec = _bucket_counts(hits)
@@ -564,7 +565,12 @@ System Instructions:
             state["answer_text"] = response_text
 
             # --- Structured Table Construction ---
-            if hits and len(hits) > 0 and not state.get("table_spec") and is_chart_enabled():
+            if (
+                hits
+                and len(hits) > 0
+                and not state.get("table_spec")
+                and is_chart_enabled()
+            ):
                 is_fd = _mentions_final_destination(question)
 
                 # Deduplicate hits by container_number to avoid multiple rows for same shipment chunks
