@@ -478,11 +478,10 @@ ORDER BY best_eta_dp_date DESC;
             {"role": "user", "content": f"Question: {q}"},
         ]
 
-        # 3. Generate SQL
         generated_sql = ""
         try:
             if is_test_mode():
-                # Mock generation for tests
+
                 generated_sql = "SELECT count(*) as total FROM df"
             else:
                 chat = _get_chat()
@@ -504,8 +503,8 @@ ORDER BY best_eta_dp_date DESC;
             )
             return state
 
-        # 4. Execute Code
-        if not generated_code:
+        # if not generated_code:
+        if not generated_sql:
             state.setdefault("errors", []).append("LLM produced no code.")
             state["answer_text"] = (
                 "I couldn't generate a valid analytics query for that question. "
