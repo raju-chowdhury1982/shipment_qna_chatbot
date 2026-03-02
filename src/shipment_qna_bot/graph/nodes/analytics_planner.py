@@ -4,10 +4,8 @@ from typing import Any, Dict, List, Optional  # type: ignore
 
 from shipment_qna_bot.logging.graph_tracing import log_node_execution
 from shipment_qna_bot.logging.logger import logger, set_log_context
-from shipment_qna_bot.tools.analytics_metadata import (
-    ANALYTICS_METADATA,
-    INTERNAL_COLUMNS,
-)
+from shipment_qna_bot.tools.analytics_metadata import (ANALYTICS_METADATA,
+                                                       INTERNAL_COLUMNS)
 from shipment_qna_bot.tools.azure_openai_chat import AzureOpenAIChatTool
 from shipment_qna_bot.tools.blob_manager import BlobAnalyticsManager
 from shipment_qna_bot.tools.duckdb_engine import DuckDBAnalyticsEngine
@@ -357,13 +355,15 @@ def analytics_planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         try:
             blob_mgr = _get_blob_manager()
             parquet_path = blob_mgr.get_local_path()
-            
+
             # Use DuckDB to get schema and head sample without loading full DF
             engine = _get_duckdb_engine()
-            sample_rel = engine.con.sql(f"SELECT * FROM read_parquet('{parquet_path}') LIMIT 5")
+            sample_rel = engine.con.sql(
+                f"SELECT * FROM read_parquet('{parquet_path}') LIMIT 5"
+            )
             df_head = sample_rel.df()
             columns = df_head.columns.tolist()
-            
+
             if df_head.empty:
                 state["answer_text"] = (
                     "I found no data available in the master dataset."
@@ -389,9 +389,12 @@ def analytics_planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
         ready_ref_content = ""
         try:
             import os
+
             ready_ref_path = "docs/ready_ref.md"
             if not os.path.exists(ready_ref_path):
-                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+                base_dir = os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), "../../../../")
+                )
                 ready_ref_path = os.path.join(base_dir, "docs", "ready_ref.md")
 
             if os.path.exists(ready_ref_path):
@@ -535,12 +538,16 @@ ORDER BY best_eta_dp_date DESC;
                 if repaired_sql and repaired_sql != generated_sql:
                     generated_sql = repaired_sql
                     exec_attempts += 1
-                    exec_result = engine.execute_query(parquet_path, generated_sql, consignee_codes)
+                    exec_result = engine.execute_query(
+                        parquet_path, generated_sql, consignee_codes
+                    )
             except Exception as repair_exc:
                 logger.warning("Analytics SQL repair pass failed: %s", repair_exc)
 
         if exec_result["success"]:
-            state["answer_text"] = f"Here is what I found:\n{exec_result.get('result', '')}"
+            state["answer_text"] = (
+                f"Here is what I found:\n{exec_result.get('result', '')}"
+            )
             state["is_satisfied"] = True
             state["analytics_last_error"] = None
             state["analytics_attempt_count"] = exec_attempts
