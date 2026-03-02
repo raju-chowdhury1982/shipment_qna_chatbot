@@ -41,17 +41,17 @@ def inspect_index():
                     print_fields(field.fields, indent + "  ")
 
         print_fields(index.fields)
-        
+
         print("\nVector Search Profiles:")
         if index.vector_search:
             for p in index.vector_search.profiles:
                 print(f"- {p.name} (Alg: {p.algorithm_configuration_name})")
-        
+
         print("\nScoring Profiles:")
         if index.scoring_profiles:
             for s in index.scoring_profiles:
                 print(f"- {s.name}")
-        
+
         print("\nSemantic Search Configurations:")
         if index.semantic_search:
             for c in index.semantic_search.configurations:

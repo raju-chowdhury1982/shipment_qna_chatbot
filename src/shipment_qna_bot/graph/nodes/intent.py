@@ -71,7 +71,14 @@ def intent_node(state: GraphState) -> GraphState:
             lowered = text.lower()
             greeting_words = {"hi", "hello", "hey", "good morning", "good afternoon"}
             analytics_words = {"chart", "graph", "analytics", "breakdown", "bucket"}
-            weather_words = {"weather", "storm", "temperature", "rain", "forecast", "climate"}
+            weather_words = {
+                "weather",
+                "storm",
+                "temperature",
+                "rain",
+                "forecast",
+                "climate",
+            }
             exit_words = {
                 "bye",
                 "goodbye",
@@ -89,7 +96,7 @@ def intent_node(state: GraphState) -> GraphState:
             elif is_chart_enabled() and any(w in lowered for w in analytics_words):
                 intent = "analytics"
             elif is_weather_enabled() and any(w in lowered for w in weather_words):
-                intent = "retrieval" # Weather is usually an enrichment for retrieval
+                intent = "retrieval"  # Weather is usually an enrichment for retrieval
 
             sub_intents = [intent]
             if "eta" in lowered:
@@ -138,7 +145,7 @@ def intent_node(state: GraphState) -> GraphState:
         analytics_instruction = ""
         if is_chart_enabled():
             analytics_instruction = "   - 'analytics': Use for general aggregating queries, summaries, counts, or listing distinct values.\n"
-        
+
         weather_instruction = ""
         if is_weather_enabled():
             weather_instruction = "   - Add 'weather' to the list if the user asks about weather, storm, temperature, or environmental impact.\n"

@@ -12,10 +12,11 @@ from shipment_qna_bot.graph.state import RetrievalPlan  # type: ignore
 from shipment_qna_bot.logging.graph_tracing import log_node_execution
 from shipment_qna_bot.logging.logger import logger, set_log_context
 from shipment_qna_bot.tools.azure_ai_search import AzureAISearchTool
-from shipment_qna_bot.tools.azure_openai_embeddings import AzureOpenAIEmbeddingsClient
-from shipment_qna_bot.tools.weather_tool import WeatherTool
+from shipment_qna_bot.tools.azure_openai_embeddings import \
+    AzureOpenAIEmbeddingsClient
 from shipment_qna_bot.tools.news_tool import NewsTool
-from shipment_qna_bot.utils.config import is_weather_enabled, is_news_enabled
+from shipment_qna_bot.tools.weather_tool import WeatherTool
+from shipment_qna_bot.utils.config import is_news_enabled, is_weather_enabled
 from shipment_qna_bot.utils.runtime import is_test_mode
 
 _SEARCH: Optional[AzureAISearchTool] = None
@@ -199,7 +200,9 @@ def _fetch_news_impact(hits: list[Dict[str, Any]], state: Dict[str, Any]) -> Non
             val = h.get(field)
             if val and isinstance(val, str) and len(val) > 3:
                 # Clean up carrier names for better search
-                clean_val = re.sub(r"\b(Inc|Ltd|Corp|Co|Shipping|Line)\b", "", val, flags=re.I).strip()
+                clean_val = re.sub(
+                    r"\b(Inc|Ltd|Corp|Co|Shipping|Line)\b", "", val, flags=re.I
+                ).strip()
                 if clean_val:
                     keywords.add(clean_val)
 
@@ -210,7 +213,7 @@ def _fetch_news_impact(hits: list[Dict[str, Any]], state: Dict[str, Any]) -> Non
     # Limit to top 3 keywords to avoid too much noise
     search_terms = sorted(list(keywords))[:3]
     articles = news_tool.fetch_news(search_terms, limit=3)
-    
+
     for art in articles:
         msg = f"News Impact ({art['source']}): {art['title']} - Potential impact on shipments involving {', '.join(search_terms)}."
         state.setdefault("notices", []).append(msg)
