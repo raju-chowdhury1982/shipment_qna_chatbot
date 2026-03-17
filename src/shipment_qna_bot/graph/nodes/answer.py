@@ -225,7 +225,7 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 total_count = int(analytics.get("count") or total_count)
             except Exception:
                 total_count = len(hits)
-        display_count = min(len(hits), 10)
+        display_count = min(len(hits), 20)
 
         # Context construction
         context_str = ""
@@ -278,12 +278,13 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # 2. Add Documents Context
         if hits:
             # I'm including the most relevant columns so the LLM has context.
-            for i, hit in enumerate(hits[:10]):
+            for i, hit in enumerate(hits[:20]):
                 context_str += f"\n--- Document {i+1} ---\n"
 
                 # Prioritize key fields (Unified List)
                 priority_fields = [
                     "container_number",
+                    "job_no",
                     "shipment_status",
                     "po_numbers",
                     "booking_numbers",
@@ -396,7 +397,7 @@ Logistics Concepts:
 System Instructions:
 1. DATA PRESENTATION (STRICT):
    - If multiple shipments are found, ALWAYS present them in a Markdown Table.
-   - TABLE COLUMNS: | Container | PO Numbers | {dest_label} | {date_label} | Status |
+   - TABLE COLUMNS: | Container | Job No | PO Numbers | {dest_label} | {date_label} | Status |
    - Sort rows by latest relevant date first (descending).
    - ARRIVAL DATE: Use 'derived_ata_dp_date' if available, otherwise 'ata_dp_date', then 'eta_dp_date'. Format as 'dd-mmm-yy'.
    - STATUS: Mention if "Delayed" or "Hot" in the status column if applicable.
@@ -517,11 +518,12 @@ System Instructions:
                 header_date = "ETA FD" if is_fd else "Arrival (ETA/ATA)"
 
                 lines = [
-                    f"| Container | PO Numbers | {header_dest} | {header_date} | Status |",
-                    "|---|---|---|---|---|",
+                    f"| Container | Job No | PO Numbers | {header_dest} | {header_date} | Status |",
+                    "|---|---|---|---|---|---|",
                 ]
                 for h in rows:
                     container = h.get("container_number") or "-"
+                    job_no = h.get("job_no") or "-"
                     po_raw = h.get("po_numbers") or []
                     if isinstance(po_raw, list):
                         # I deduplicate POs to keep the table clean.
@@ -557,7 +559,7 @@ System Instructions:
                     status_str = " / ".join(status_parts) if status_parts else "-"
 
                     lines.append(
-                        f"| {container} | {po_numbers} | {dest_val} | {arrival} | {status_str} |"
+                        f"| {container} | {job_no} | {po_numbers} | {dest_val} | {arrival} | {status_str} |"
                     )
                 return "\n".join(lines)
 
@@ -636,6 +638,7 @@ System Instructions:
 
                 cols = [
                     "container_number",
+                    "job_no",
                     "po_numbers",
                     "final_destination" if is_fd else "discharge_port",
                     "eta_fd_date" if is_fd else "derived_ata_dp_date",
@@ -691,7 +694,7 @@ System Instructions:
 
                 if "|" not in response_text:
                     response_text = (
-                        response_text.rstrip() + "\n\n" + _build_table(unique_hits[:10])
+                        response_text.rstrip() + "\n\n" + _build_table(unique_hits[:20])
                     )
                     state["answer_text"] = response_text
 
