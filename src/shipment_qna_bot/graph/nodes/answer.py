@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, cast
 
 from shipment_qna_bot.logging.graph_tracing import log_node_execution
@@ -592,7 +592,6 @@ System Instructions:
             if (
                 hits
                 and len(hits) > 0
-                and not state.get("table_spec")
             ):
                 # I'll build a structured table if I haven't already.
                 is_fd = _mentions_final_destination(question)
