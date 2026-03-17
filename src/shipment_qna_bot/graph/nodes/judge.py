@@ -107,7 +107,7 @@ Output MUST be a JSON object:
 
         today_str = state.get("today_date") or get_today_date()
         context_str = ""
-        for i, hit in enumerate(hits[:10]):
+        for i, hit in enumerate(hits[:20]):
             context_str += f"\n--- Doc {i+1} ---\n{json.dumps(hit, indent=2)}\n"
 
         user_prompt = "Judge the answer now."

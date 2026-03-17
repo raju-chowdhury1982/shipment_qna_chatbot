@@ -593,7 +593,6 @@ System Instructions:
                 hits
                 and len(hits) > 0
                 and not state.get("table_spec")
-                and is_chart_enabled()
             ):
                 # I'll build a structured table if I haven't already.
                 is_fd = _mentions_final_destination(question)
