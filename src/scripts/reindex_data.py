@@ -1,5 +1,3 @@
-# $env:PYTHONPATH='c:\Users\CHOWDHURYRaju\Desktop\shipment_qna_bot\src'; python src/scripts/reindex_data.py shipment_dec25.jsonl
-
 import json
 import os
 import re
@@ -10,6 +8,7 @@ from typing import Any, Dict, List
 # Ensure src is in python path
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+from scripts.schema_definitions import SCHEMA_FIELDS
 from shipment_qna_bot.tools.azure_ai_search import AzureAISearchTool
 from shipment_qna_bot.tools.azure_openai_embeddings import \
     AzureOpenAIEmbeddingsClient
@@ -29,6 +28,73 @@ def load_data(file_path: str) -> List[Dict[str, Any]]:
     return documents
 
 
+def to_list(val: Any) -> List[str]:
+    if val is None:
+        return []
+    if isinstance(val, list):
+        flat = []
+        for item in val:
+            if isinstance(item, str) and "," in item:
+                flat.extend([s.strip() for s in item.split(",") if s.strip()])
+            elif item is not None:
+                flat.append(str(item))
+        return list(set(flat))
+    if isinstance(val, str):
+        if "," in val:
+            return [s.strip() for s in val.split(",") if s.strip()]
+        return [val.strip()]
+    return [str(val)]
+
+
+def to_float(val: Any) -> Any:
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except Exception:
+        return None
+
+
+def to_bool(val: Any) -> Any:
+    if val is None:
+        return False
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() in ("true", "1", "yes", "y")
+    return bool(val)
+
+
+def _normalize_dt(val: Any) -> Any:
+    if val is None:
+        return None
+    try:
+        if str(val).strip().lower() in {"nat", "nan", "none", ""}:
+            return None
+    except Exception:
+        pass
+    if isinstance(val, str):
+        s = val.strip()
+        if not s:
+            return None
+        if s.lower() in {"nat", "nan", "none"}:
+            return None
+        if s.endswith("Z") or re.search(r"[+-]\d\d:\d\d$", s):
+            return s
+        try:
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat()
+        except Exception:
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+                return s + "T00:00:00Z"
+            if re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$", s):
+                return s + "Z"
+            return s
+    return val
+
+
 def flatten_document(
     doc: Dict[str, Any], embedder: AzureOpenAIEmbeddingsClient
 ) -> Dict[str, Any]:
@@ -41,7 +107,7 @@ def flatten_document(
             "Invalid JSONL schema. Require document_id, content, and metadata dict."
         )
 
-    # Consignee codes (RLS)
+    # Resolve core values
     consignee_codes = metadata.get("consignee_codes", [])
     if not consignee_codes:
         raw = doc.get("consignee_code")
@@ -53,129 +119,61 @@ def flatten_document(
     if not consignee_codes:
         raise ValueError("Missing consignee_codes for RLS.")
 
-    # Geenerate embedding
+    doc["consignee_code_ids"] = consignee_codes
+
+    # Generate Embeddings
     print(f"Generating embedding for doc {doc_id}...")
     vector = embedder.embed_query(content)
 
-    def to_list(val):
-        if val is None:
-            return []
-        if isinstance(val, list):
-            # Flatten any nested lists and ensure all elements are strings
-            flat = []
-            for item in val:
-                if isinstance(item, str) and "," in item:
-                    flat.extend([s.strip() for s in item.split(",") if s.strip()])
-                else:
-                    flat.append(str(item))
-            return list(set(flat))
-        if isinstance(val, str):
-            if "," in val:
-                return [s.strip() for s in val.split(",") if s.strip()]
-            return [val.strip()]
-        return [str(val)]
-
-    def _meta(key: str) -> Any:
-        return metadata.get(key)
-
-    def _normalize_dt(val: Any) -> Any:
-        if val is None:
-            return None
-        try:
-            if str(val).strip().lower() in {"nat", "nan", "none", ""}:
-                return None
-        except Exception:
-            pass
-        if isinstance(val, str):
-            s = val.strip()
-            if not s:
-                return None
-            if s.lower() in {"nat", "nan", "none"}:
-                return None
-            if s.endswith("Z") or re.search(r"[+-]\d\d:\d\d$", s):
-                return s
-            try:
-                dt = datetime.fromisoformat(s)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                return dt.isoformat()
-            except Exception:
-                if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
-                    return s + "T00:00:00Z"
-                if re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$", s):
-                    return s + "Z"
-                return s
-        return val
-
-    ata_dp_date = (
-        _meta("derived_ata_dp_date")
-        or _meta("ata_dp_date")
-        or _meta("optimal_ata_dp_date")
-    )
-    best_eta_dp_date = (
-        _meta("best_eta_dp_date")
-        or _meta("optimal_ata_dp_date")
-        or _meta("derived_ata_dp_date")
-        or _meta("ata_dp_date")
-    )
-    eta_fd_date = _meta("optimal_eta_fd_date") or _meta("eta_fd_date")
-    best_eta_fd_date = (
-        _meta("best_eta_fd_date")
-        or _meta("optimal_eta_fd_date")
-        or _meta("revised_eta_fd_date")
-        or _meta("eta_fd_date")
-    )
-
     flattened = {
-        "document_id": str(doc_id),
-        "content": content,
-        "content_vector": vector,
-        "consignee_code_ids": to_list(consignee_codes),
-        "container_number": metadata.get("container_number"),
-        "po_numbers": to_list(metadata.get("po_numbers", [])),
-        "obl_nos": to_list(
-            metadata.get("obl_nos", metadata.get("ocean_bl_numbers", []))
-        ),
-        "booking_numbers": to_list(metadata.get("booking_numbers", [])),
-        "hot_container_flag": bool(
-            metadata.get("hot_container", metadata.get("hot_container_flag", False))
-        ),
-        "container_type": _meta("container_type"),
-        "destination_service": _meta("destination_service"),
-        "load_port": _meta("load_port"),
-        "final_load_port": _meta("final_load_port"),
-        "discharge_port": _meta("discharge_port"),
-        "last_cy_location": _meta("last_cy_location"),
-        "place_of_receipt": _meta("place_of_receipt"),
-        "place_of_delivery": _meta("place_of_delivery"),
-        "final_destination": _meta("final_destination"),
-        "first_vessel_name": _meta("first_vessel_name"),
-        "final_carrier_name": _meta("final_carrier_name"),
-        "final_vessel_name": _meta("final_vessel_name"),
-        "shipment_status": _meta("shipment_status"),
-        "true_carrier_scac_name": _meta("true_carrier_scac_name"),
-        "etd_lp_date": _normalize_dt(_meta("etd_lp_date")),
-        "etd_flp_date": _normalize_dt(_meta("etd_flp_date")),
-        "eta_dp_date": _normalize_dt(_meta("eta_dp_date")),
-        "eta_fd_date": _normalize_dt(eta_fd_date),
-        "best_eta_dp_date": _normalize_dt(best_eta_dp_date),
-        "best_eta_fd_date": _normalize_dt(best_eta_fd_date),
-        "atd_lp_date": _normalize_dt(_meta("atd_lp_date")),
-        "ata_flp_date": _normalize_dt(_meta("ata_flp_date")),
-        "atd_flp_date": _normalize_dt(_meta("atd_flp_date")),
-        "ata_dp_date": _normalize_dt(ata_dp_date),
-        "supplier_vendor_name": _meta("supplier_vendor_name"),
-        "manufacturer_name": _meta("manufacturer_name"),
-        "ship_to_party_name": _meta("ship_to_party_name"),
-        "job_type": _meta("job_type"),
-        "mcs_hbl": _meta("mcs_hbl"),
-        "transport_mode": _meta("transport_mode"),
-        # Metadata JSON blob
         "metadata_json": json.dumps(metadata),
+        "content_vector": vector,
     }
 
-    # Handle dates if present
-    # ... (simplifying for now, can add more later if needed)
+    # Dynamically apply logic based on our unified schema dictionary
+    for fdef in SCHEMA_FIELDS:
+        name = fdef.name
+
+        # Pull value directly from root if defined
+        if name in doc and name != "metadata":
+            raw_val = doc[name]
+        else:
+            # Fallback to checking metadata
+            raw_val = None
+
+            # Check custom mapping first (which can be a single string or a list of fallback strings)
+            if fdef.source_keys:
+                if isinstance(fdef.source_keys, list):
+                    for k in fdef.source_keys:
+                        if k in metadata and metadata[k] is not None:
+                            raw_val = metadata[k]
+                            break
+                else:
+                    raw_val = metadata.get(fdef.source_keys)
+
+            # Lastly, attempt exact name match from metadata
+            if raw_val is None:
+                raw_val = metadata.get(name)
+
+        # Apply Type Casting
+        val = None
+        if fdef.type_name == "Collection(String)":
+            val = to_list(raw_val)
+        elif fdef.type_name == "DateTimeOffset":
+            val = _normalize_dt(raw_val)
+        elif fdef.type_name == "Boolean":
+            val = to_bool(raw_val)
+        elif fdef.type_name == "Double":
+            val = to_float(raw_val)
+        else:  # String
+            val_str = str(raw_val) if raw_val is not None else None
+            # Do not upload "None" strings, keep json nulls
+            if val_str is None or val_str.strip().lower() in ("", "nan", "null"):
+                val = None
+            else:
+                val = val_str
+
+        flattened[name] = val
 
     return flattened
 
@@ -210,8 +208,7 @@ def main():
     parser.add_argument(
         "--allow-partial",
         action="store_true",
-        help="Upload docs that processed successfully even if some failed. "
-        "Writes dead-letter for failures.",
+        help="Upload docs that processed successfully even if some failed. Writers dead-letter for failures.",
     )
     args = parser.parse_args()
 
@@ -259,7 +256,6 @@ def main():
     print(f"Uploading {len(processed_docs)} docs to the index...")
     tool = AzureAISearchTool()
     try:
-        # Use batching for upload if possible, tool.upload_documents usually handles this
         tool.upload_documents(processed_docs)
         print("Full re-indexing complete!")
     except Exception as e:

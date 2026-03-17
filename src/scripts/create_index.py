@@ -1,6 +1,8 @@
-# $env:PYTHONPATH='c:\Users\CHOWDHURYRaju\Desktop\shipment_qna_bot\src'; python src/scripts/create_index.py
-
 import os
+import sys
+
+# Ensure src is in python path
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from azure.core.credentials import AzureKeyCredential
 from azure.identity import DefaultAzureCredential
@@ -17,7 +19,26 @@ from azure.search.documents.indexes.models import (HnswAlgorithmConfiguration,
                                                    VectorSearchProfile)
 from dotenv import find_dotenv, load_dotenv
 
+from scripts.schema_definitions import SCHEMA_FIELDS
+
 load_dotenv(find_dotenv(), override=True)
+
+
+def _map_type(type_name: str) -> SearchFieldDataType:
+    mapping = {
+        "String": SearchFieldDataType.String,
+        "Boolean": SearchFieldDataType.Boolean,
+        "Double": SearchFieldDataType.Double,
+        "Int32": SearchFieldDataType.Int32,
+        "Int64": SearchFieldDataType.Int64,
+        "DateTimeOffset": SearchFieldDataType.DateTimeOffset,
+        "Collection(String)": SearchFieldDataType.Collection(
+            SearchFieldDataType.String
+        ),
+    }
+    if type_name not in mapping:
+        raise ValueError(f"Unknown type_name: {type_name}")
+    return mapping[type_name]
 
 
 def create_index():
@@ -32,256 +53,70 @@ def create_index():
     cred = AzureKeyCredential(api_key) if api_key else DefaultAzureCredential()
     client = SearchIndexClient(endpoint=endpoint, credential=cred)
 
-    # Define the fields
-    fields = [
-        SimpleField(
-            name="document_id",
-            type=SearchFieldDataType.String,
-            key=True,
-            filterable=True,
-        ),
-        SearchField(name="content", type=SearchFieldDataType.String, searchable=True),
-        # Vector field for hybrid search
+    # 1. Dynamically Construct Fields from Schema
+    fields = []
+    for fdef in SCHEMA_FIELDS:
+        # Document ID is a special Key field
+        if fdef.name == "document_id":
+            fields.append(
+                SimpleField(
+                    name=fdef.name,
+                    type=_map_type(fdef.type_name),
+                    key=True,
+                    filterable=fdef.filterable,
+                )
+            )
+            continue
+
+        # Simple Fields don't need analyzer/searchable configs overhead
+        if (
+            not fdef.searchable
+            and fdef.type_name != "String"
+            and fdef.type_name != "Collection(String)"
+        ):
+            fields.append(
+                SimpleField(
+                    name=fdef.name,
+                    type=_map_type(fdef.type_name),
+                    filterable=fdef.filterable,
+                    sortable=fdef.sortable,
+                )
+            )
+        else:
+            fields.append(
+                SearchField(
+                    name=fdef.name,
+                    type=_map_type(fdef.type_name),
+                    searchable=fdef.searchable,
+                    filterable=fdef.filterable,
+                    sortable=fdef.sortable,
+                )
+            )
+
+    # 2. Add Vector Field
+    fields.append(
         SearchField(
             name="content_vector",
             type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
             searchable=True,
-            vector_search_dimensions=1536,  # Default for text-embedding-ada-002 and text-embedding-3-small
+            vector_search_dimensions=1536,  # Default for text-embedding-ada-002 / text-embedding-3-small
             vector_search_profile_name="my-vector-profile",
-        ),
-        # RLS Field: Critical for filtering
-        SearchField(
-            name="consignee_code_ids",
-            type=SearchFieldDataType.Collection(SearchFieldDataType.String),
-            filterable=True,
-        ),
-        # Lookup Fields
-        SearchField(
-            name="container_number",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="po_numbers",
-            type=SearchFieldDataType.Collection(SearchFieldDataType.String),
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="obl_nos",
-            type=SearchFieldDataType.Collection(SearchFieldDataType.String),
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="booking_numbers",
-            type=SearchFieldDataType.Collection(SearchFieldDataType.String),
-            searchable=True,
-            filterable=True,
-        ),
-        # User-filterable shipment attributes
-        SearchField(
-            name="container_type",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="destination_service",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="load_port",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="final_load_port",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="discharge_port",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="last_cy_location",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="place_of_receipt",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="place_of_delivery",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="final_destination",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="first_vessel_name",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="final_carrier_name",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="final_vessel_name",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="shipment_status",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="true_carrier_scac_name",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SimpleField(
-            name="hot_container_flag",
-            type=SearchFieldDataType.Boolean,
-            filterable=True,
-            sortable=True,
-        ),
-        # Date Fields
-        SearchField(
-            name="etd_lp_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="etd_flp_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="eta_dp_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="eta_fd_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="best_eta_dp_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="best_eta_fd_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="atd_lp_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="ata_flp_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="atd_flp_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="ata_dp_date",
-            type=SearchFieldDataType.DateTimeOffset,
-            filterable=True,
-            sortable=True,
-        ),
-        SearchField(
-            name="supplier_vendor_name",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="manufacturer_name",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="ship_to_party_name",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="job_type",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="mcs_hbl",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        SearchField(
-            name="transport_mode",
-            type=SearchFieldDataType.String,
-            searchable=True,
-            filterable=True,
-        ),
-        # Additional metadata as blob
+        )
+    )
+
+    # 3. Add Raw Metadata JSON dump (non-searchable/filterable)
+    fields.append(
         SearchField(
             name="metadata_json",
             type=SearchFieldDataType.String,
             searchable=False,
             filterable=False,
-        ),
-    ]
+        )
+    )
 
-    # Configure vector search
+    # Configure Vector Search
     vector_search = VectorSearch(
-        algorithms=[
-            HnswAlgorithmConfiguration(name="my-hnsw"),
-        ],
+        algorithms=[HnswAlgorithmConfiguration(name="my-hnsw")],
         profiles=[
             VectorSearchProfile(
                 name="my-vector-profile", algorithm_configuration_name="my-hnsw"
@@ -289,7 +124,7 @@ def create_index():
         ],
     )
 
-    # Configure scoring profiles
+    # Configure Scoring profiles (Boost content search)
     scoring_profiles = [
         ScoringProfile(
             name="logistics-score",
@@ -297,7 +132,7 @@ def create_index():
         )
     ]
 
-    # Configure semantic search
+    # Configure Semantic Search (For hybrid retrieval)
     semantic_search = SemanticSearch(
         configurations=[
             SemanticConfiguration(
