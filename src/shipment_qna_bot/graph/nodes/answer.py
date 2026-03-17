@@ -76,6 +76,14 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 return True
             return False
 
+        def _mentions_discharge_port(text: str) -> bool:
+            lowered = text.lower()
+            if "discharge port" in lowered or "discharge_port" in lowered:
+                return True
+            if re.search(r"\bdp\b", lowered):
+                return True
+            return False
+
         def _wants_bucket_chart(text: str) -> bool:
             lowered = text.lower()
             bucket_words = ["bucket", "breakdown", "group", "chart", "graph"]
@@ -288,6 +296,7 @@ def answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "shipment_status",
                     "po_numbers",
                     "booking_numbers",
+                    "obl_nos",
                     "true_carrier_scac_name",
                     "final_carrier_name",
                     "first_vessel_name",
@@ -609,87 +618,132 @@ System Instructions:
 
                 sort_floor = datetime.min.replace(tzinfo=timezone.utc)
 
+                is_fd_expl = _mentions_final_destination(question)
+                is_dp_expl = _mentions_discharge_port(question)
+
                 def _row_sort_dt(hit: Dict[str, Any]) -> datetime:
-                    if is_fd:
-                        dt = _parse_dt(
+                    # If FD is explicit, use FD dates. If DP is explicit, use DP dates.
+                    # If neither, try FD first (as it's often the end goal), then fallback to DP.
+                    if is_fd_expl and not is_dp_expl:
+                        dt_val = (
                             hit.get("best_eta_fd_date")
                             or hit.get("eta_fd_date")
                             or hit.get("optimal_eta_fd_date")
                         )
-                    else:
-                        dt = _parse_dt(
+                    elif is_dp_expl and not is_fd_expl:
+                        dt_val = (
                             hit.get("best_eta_dp_date")
                             or hit.get("derived_ata_dp_date")
                             or hit.get("ata_dp_date")
                             or hit.get("eta_dp_date")
                             or hit.get("optimal_ata_dp_date")
                         )
+                    else:
+                        # Fallback order: FD dates then DP dates
+                        dt_val = (
+                            hit.get("best_eta_fd_date")
+                            or hit.get("eta_fd_date")
+                            or hit.get("optimal_eta_fd_date")
+                            or hit.get("best_eta_dp_date")
+                            or hit.get("derived_ata_dp_date")
+                            or hit.get("ata_dp_date")
+                            or hit.get("eta_dp_date")
+                        )
+                    dt = _parse_dt(dt_val)
                     return dt or sort_floor
 
                 unique_hits.sort(key=_row_sort_dt, reverse=True)
 
                 # I'm providing explicit human-friendly headers for the table.
+                if is_fd_expl and not is_dp_expl:
+                    loc_header, loc_key = "Final Destination", "final_destination"
+                    date_header, date_key = "ETA FD", "eta_fd_date"
+                elif is_dp_expl and not is_fd_expl:
+                    loc_header, loc_key = "Discharge Port", "discharge_port"
+                    date_header, date_key = "Arrival (ETA/ATA)", "derived_ata_dp_date"
+                else:
+                    # Ambiguous -> Combined/fallback logic
+                    loc_header, loc_key = "Location (FD/DP)", "combined_location"
+                    date_header, date_key = "Arrival Date", "combined_date"
+
                 display_cols = [
                     "Container",
                     "Job No",
                     "PO Numbers",
-                    "Final Destination" if is_fd else "Discharge Port",
-                    "ETA FD" if is_fd else "Arrival (ETA/ATA)",
+                    loc_header,
+                    date_header,
                     "Status",
                     "Carrier",
                     "Vessel",
                     "Priority",
                 ]
-                # I'll keep the internal keys for the data mapping.
-                data_keys = [
-                    "container_number",
-                    "job_no",
-                    "po_numbers",
-                    "final_destination" if is_fd else "discharge_port",
-                    "eta_fd_date" if is_fd else "derived_ata_dp_date",
-                    "shipment_status",
-                    "final_carrier_name",
-                    "final_vessel_name",
-                    "hot_container_flag",
-                ]
+                # data_keys will be handled dynamically in the loop for combined fields
                 table_rows: List[Dict[str, Any]] = []
                 for h in unique_hits:
                     row = {}
-                    for i, c in enumerate(data_keys):
-                        val = h.get(c)
-                        target_col_name = display_cols[i]
-                        if c == "derived_ata_dp_date" and not val:
-                            val = (
-                                h.get("best_eta_dp_date")
-                                or h.get("ata_dp_date")
-                                or h.get("eta_dp_date")
-                                or h.get("optimal_ata_dp_date")
-                            )
-                        if c == "eta_fd_date" and not val:
-                            val = (
-                                h.get("best_eta_fd_date")
-                                or h.get("optimal_eta_fd_date")
-                                or h.get("eta_fd_date")
-                            )
+                    # Build individual row values
+                    for col_name in display_cols:
+                        val = None
+                        if col_name == "Container":
+                            val = h.get("container_number")
+                        elif col_name == "Job No":
+                            val = h.get("job_no")
+                        elif col_name == "PO Numbers":
+                            val = h.get("po_numbers")
+                        elif col_name == loc_header:
+                            if loc_key == "combined_location":
+                                # Try FD then DP
+                                val = h.get("final_destination") or h.get("discharge_port")
+                            else:
+                                val = h.get(loc_key)
+                        elif col_name == date_header:
+                            if date_key == "combined_date":
+                                # Try FD dates then DP dates
+                                val = (
+                                    h.get("best_eta_fd_date")
+                                    or h.get("eta_fd_date")
+                                    or h.get("optimal_eta_fd_date")
+                                    or h.get("best_eta_dp_date")
+                                    or h.get("derived_ata_dp_date")
+                                    or h.get("ata_dp_date")
+                                    or h.get("eta_dp_date")
+                                )
+                            elif date_key == "derived_ata_dp_date":
+                                val = (
+                                    h.get("derived_ata_dp_date")
+                                    or h.get("best_eta_dp_date")
+                                    or h.get("ata_dp_date")
+                                    or h.get("eta_dp_date")
+                                )
+                            elif date_key == "eta_fd_date":
+                                val = (
+                                    h.get("eta_fd_date")
+                                    or h.get("best_eta_fd_date")
+                                    or h.get("optimal_eta_fd_date")
+                                )
+                            else:
+                                val = h.get(date_key)
+                        elif col_name == "Status":
+                            val = h.get("shipment_status")
+                        elif col_name == "Carrier":
+                            val = h.get("final_carrier_name")
+                        elif col_name == "Vessel":
+                            val = h.get("final_vessel_name")
+                        elif col_name == "Priority":
+                            val = h.get("hot_container_flag")
                         # I format lists (like POs) as clean strings.
                         if isinstance(val, list):
                             val = ", ".join(sorted(list(set(map(str, val)))))
 
                         # I format dates specifically for the table.
-                        if c in [
-                            "eta_fd_date",
-                            "eta_dp_date",
-                            "derived_ata_dp_date",
-                            "ata_dp_date",
-                            "atd_lp_date",
-                        ]:
+                        if col_name == date_header:
                             val = _fmt_date(val)
 
                         # I map boolean flags to human-friendly text.
-                        if c == "hot_container_flag":
+                        if col_name == "Priority":
                             val = "🔥 PRIORITY" if val else "Normal"
 
-                        row[target_col_name] = val
+                        row[col_name] = val
                     table_rows.append(row)
 
                 state["table_spec"] = {

@@ -158,6 +158,14 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 return True
             return False
 
+        def _mentions_discharge_port(text: str) -> bool:
+            lowered = text.lower()
+            if "discharge port" in lowered or "discharge_port" in lowered:
+                return True
+            if re.search(r"\bdp\b", lowered):
+                return True
+            return False
+
         def _extract_delay_days(text: str) -> Optional[int]:
             lowered = text.lower()
             if "delay" not in lowered and "delayed" not in lowered:
@@ -272,13 +280,30 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         locations = extracted.get("location") or []
         if locations:
-            location_field = (
-                "final_destination"
-                if _mentions_final_destination(q)
-                else "discharge_port"
-            )
-            parts = [f"contains({location_field}, '{_safe(loc)}')" for loc in locations]
-            filter_clauses.append("(" + " or ".join(parts) + ")")
+            is_fd_explicit = _mentions_final_destination(q)
+            is_dp_explicit = _mentions_discharge_port(q)
+
+            if is_fd_explicit and not is_dp_explicit:
+                location_field = "final_destination"
+                parts = [
+                    f"contains({location_field}, '{_safe(loc)}')" for loc in locations
+                ]
+                filter_clauses.append("(" + " or ".join(parts) + ")")
+            elif is_dp_explicit and not is_fd_explicit:
+                location_field = "discharge_port"
+                parts = [
+                    f"contains({location_field}, '{_safe(loc)}')" for loc in locations
+                ]
+                filter_clauses.append("(" + " or ".join(parts) + ")")
+            else:
+                # Ambiguous or both mentioned -> Search BOTH
+                parts = []
+                for loc in locations:
+                    safe_loc = _safe(loc)
+                    parts.append(
+                        f"(contains(discharge_port, '{safe_loc}') or contains(final_destination, '{safe_loc}'))"
+                    )
+                filter_clauses.append("(" + " or ".join(parts) + ")")
 
         if filter_clauses:
             plan["extra_filter"] = " and ".join(filter_clauses)
