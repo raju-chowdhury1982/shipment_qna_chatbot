@@ -598,14 +598,8 @@ System Instructions:
                 # I'll build a structured table if I haven't already.
                 is_fd = _mentions_final_destination(question)
 
-                # I deduplicate by container number so I don't show the same shipment twice.
-                unique_hits = []
-                seen_containers = set()
-                for h in hits:
-                    c_num = h.get("container_number") or h.get("document_id")
-                    if c_num not in seen_containers:
-                        unique_hits.append(h)
-                        seen_containers.add(c_num)
+                # User wants to see all shipments (e.g. 14/14), even if containers are repeats.
+                unique_hits = hits[:20]
 
                 # If I'm looking for specific IDs, I'll filter the table rows here.
                 if any(requested_ids.values()):
@@ -636,7 +630,20 @@ System Instructions:
 
                 unique_hits.sort(key=_row_sort_dt, reverse=True)
 
-                cols = [
+                # I'm providing explicit human-friendly headers for the table.
+                display_cols = [
+                    "Container",
+                    "Job No",
+                    "PO Numbers",
+                    "Final Destination" if is_fd else "Discharge Port",
+                    "ETA FD" if is_fd else "Arrival (ETA/ATA)",
+                    "Status",
+                    "Carrier",
+                    "Vessel",
+                    "Priority",
+                ]
+                # I'll keep the internal keys for the data mapping.
+                data_keys = [
                     "container_number",
                     "job_no",
                     "po_numbers",
@@ -650,8 +657,9 @@ System Instructions:
                 table_rows: List[Dict[str, Any]] = []
                 for h in unique_hits:
                     row = {}
-                    for c in cols:
+                    for i, c in enumerate(data_keys):
                         val = h.get(c)
+                        target_col_name = display_cols[i]
                         if c == "derived_ata_dp_date" and not val:
                             val = (
                                 h.get("best_eta_dp_date")
@@ -683,11 +691,11 @@ System Instructions:
                         if c == "hot_container_flag":
                             val = "🔥 PRIORITY" if val else "Normal"
 
-                        row[c] = val
+                        row[target_col_name] = val
                     table_rows.append(row)
 
                 state["table_spec"] = {
-                    "columns": cols,
+                    "columns": display_cols,
                     "rows": table_rows,
                     "title": "Shipment List",
                 }
