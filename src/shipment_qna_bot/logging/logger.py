@@ -1,6 +1,7 @@
 import contextvars
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
@@ -60,9 +61,17 @@ def setup_logger(name: str = "shipment_qna_bot", level: str = "INFO") -> logging
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "app.log"
 
-    file_handler = RotatingFileHandler(
-        log_file, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
-    )
+    rotate_logs = os.getenv("SHIPMENT_QNA_ROTATE_LOGS", "1") not in {"0", "false", "False"}
+    if os.name == "nt" and rotate_logs:
+        # Avoid Windows log-rotation rename collisions under uvicorn reload/multi-process.
+        rotate_logs = False
+
+    if rotate_logs:
+        file_handler = RotatingFileHandler(
+            log_file, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+        )
+    else:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(JSONFormatter())
     logger.addHandler(file_handler)
 
