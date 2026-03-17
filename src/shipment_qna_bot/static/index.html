@@ -844,7 +844,7 @@
             if (role === 'bot') {
                 let renderText = text || '';
                 let fallbackTable = null;
-                const allowAnalyticsRender = String(intent || '').toLowerCase() === 'analytics';
+                const allowAnalyticsRender = ['analytics', 'retrieval', 'chart'].includes(String(intent || '').toLowerCase());
 
                 if (allowAnalyticsRender && table && table.rows && table.rows.length > 0) {
                     renderText = stripMarkdownTables(renderText);
