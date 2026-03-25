@@ -61,7 +61,11 @@ def setup_logger(name: str = "shipment_qna_bot", level: str = "INFO") -> logging
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "app.log"
 
-    rotate_logs = os.getenv("SHIPMENT_QNA_ROTATE_LOGS", "1") not in {"0", "false", "False"}
+    rotate_logs = os.getenv("SHIPMENT_QNA_ROTATE_LOGS", "1") not in {
+        "0",
+        "false",
+        "False",
+    }
     if os.name == "nt" and rotate_logs:
         # Avoid Windows log-rotation rename collisions under uvicorn reload/multi-process.
         rotate_logs = False

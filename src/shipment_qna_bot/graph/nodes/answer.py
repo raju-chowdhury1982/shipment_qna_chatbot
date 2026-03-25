@@ -598,10 +598,7 @@ System Instructions:
             state["answer_text"] = response_text
 
             # --- Structured Table Construction ---
-            if (
-                hits
-                and len(hits) > 0
-            ):
+            if hits and len(hits) > 0:
                 # I'll build a structured table if I haven't already.
                 is_fd = _mentions_final_destination(question)
 
@@ -693,7 +690,9 @@ System Instructions:
                         elif col_name == loc_header:
                             if loc_key == "combined_location":
                                 # Try FD then DP
-                                val = h.get("final_destination") or h.get("discharge_port")
+                                val = h.get("final_destination") or h.get(
+                                    "discharge_port"
+                                )
                             else:
                                 val = h.get(loc_key)
                         elif col_name == date_header:
